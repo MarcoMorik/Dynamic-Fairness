@@ -1,7 +1,7 @@
 ##Imports
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
+from matplotlib.lines import Line2D
 """pgf_with_rc_fonts = {
     "font.family": "serif",
     "font.serif": [],                    # use latex default serif font
@@ -18,8 +18,8 @@ mpl.rcParams.update(params)
 
 
 def init_plotting():
-    plt.rcParams['figure.figsize'] = (8, 3)
-    plt.rcParams['font.size'] = 10
+    plt.rcParams['figure.figsize'] = (15,5)
+    plt.rcParams['font.size'] = 20
     plt.rcParams['font.family'] = 'serif' #'Times New Roman'
     plt.rcParams['axes.labelsize'] = plt.rcParams['font.size']
     plt.rcParams['axes.titlesize'] = 1.5*plt.rcParams['font.size']
@@ -85,7 +85,7 @@ U_STD = 0.3
 W_FAIR = 10
 KP = 0.001
 PROB_W = 5
-LP_COMPENSATE_W =  0.025 #1
+LP_COMPENSATE_W = 1# 0.025 #1
 #GROUP_BOUNDARIES = [[-1,-0.33],[0.33,1]] #Boundaries for Left and Right
 GROUP_BOUNDARIES = [[-1,-0],[0,1]] #Boundaries for Left and Right
 
@@ -432,7 +432,7 @@ def fair_rank(items, popularity,ind_fair=False, group_fair=True, debug=False, w_
         j = 0
         for a,b in comparisons:
             f = np.zeros(n_c)
-            if len(G[a]) > 0 and len(G[b])>0 and U[a] >= U[b]: #len(G[a]) * U[a] >= len(G[b]) *U[b]: for comparing mean popularity
+            if len(G[a]) > 0 and len(G[b])>0: # and U[a] >= U[b]: #len(G[a]) * U[a] >= len(G[b]) *U[b]: for comparing mean popularity
                 for i in range(n):
                     #tmp1 = 1. / U[a] if i in G[a] else 0 
                     #tmp2 = 1. / U[b] if i in G[b] else 0
@@ -543,16 +543,16 @@ def ideal_rank(users, item_affs):
 
 #CLICK FUNCTION P(click|item) = P(obs|position)*P(relevance|affiliation)*P(click|relevance) = position_bias*affiliation_bias
 #rank by expected rel over users P(rel)
-def click(user, popularity, items, weighted_popularity=None, G=None, ranking_method="Biased-Pop", click_model="PBM_log",cum_exposure = None, decomp = None, new_fair_rank = False, nn=None,  integral_fairness = None):
+def click(user, popularity, items, weighted_popularity=None, G=None, ranking_method="Naive", click_model="PBM_log",cum_exposure = None, decomp = None, new_fair_rank = False, nn=None,  integral_fairness = None):
     n = len(popularity)
     click_prob = np.zeros(n)
     fairness_error = None
     
     #Ranking of the entries
-    if(ranking_method=="Biased-Pop"):
+    if(ranking_method=="Naive"):
         ranking = pop_rank(popularity)
         
-    elif(ranking_method=="IPS-Pop"):
+    elif(ranking_method=="IPS"):
         assert(weighted_popularity is not None)
         ranking = IPS_rank(weighted_popularity)
 
@@ -576,21 +576,21 @@ def click(user, popularity, items, weighted_popularity=None, G=None, ranking_met
         else:
             ranking = IPS_rank(weighted_popularity)
             
-    elif(ranking_method=="Fair-I-IPS-Pop"):
+    elif(ranking_method=="Fair-I-IPS"):
         fairness_error = get_unfairness(popularity, weighted_popularity, G, error = True)
         ranking = controller_rank(weighted_popularity,fairness_error)
 
-    elif (ranking_method == "Fair-E-IPS-Pop"):
+    elif (ranking_method == "Fair-E-IPS"):
         fairness_error = get_unfairness(cum_exposure, weighted_popularity, G, error=True)
         ranking = controller_rank(weighted_popularity, fairness_error)
 
     elif("Pers" in ranking_method):
         if nn is None:
             ranking = IPS_rank(weighted_popularity)
-        elif "Fair-E-IPS-Pers" == ranking_method:
+        elif "Fair-E-Pers" == ranking_method:
             fairness_error = get_unfairness(cum_exposure, weighted_popularity, G, error=True)
             ranking = neural_rank(nn, items, user, e_p=fairness_error)
-        elif "Fair-I-IPS-Pers" == ranking_method:
+        elif "Fair-I-Pers" == ranking_method:
             fairness_error = get_unfairness(popularity, weighted_popularity, G, error=True)
             ranking = neural_rank(nn, items, user, e_p=fairness_error)
 
@@ -687,7 +687,7 @@ def get_unfairness(clicks, rel, G, error = False, boost = False, group_sum = Fal
         return group_fairness
 
 #simulation function returns number of iterations until convergence
-def simulate(popularity, items, ranking_method="Biased-Pop", click_model="PBM_log", iterations = 2000, numerical_relevance = None):
+def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", iterations = 2000, numerical_relevance = None):
     G = assign_groups(items)
     weighted_popularity = np.asarray(popularity,dtype = np.float32)
     popularity = np.asarray(popularity)
@@ -763,7 +763,7 @@ def simulate(popularity, items, ranking_method="Biased-Pop", click_model="PBM_lo
                               np.shape(train_y))
                     nn.train(train_x, train_y, epochs=600 )
 
-                elif (ranking_method == "IPS-Pers" or ranking_method=="Neural Impact-Controller" or ranking_method =="Neural Exposure-Controller"):
+                elif (ranking_method == "Pers" or ranking_method=="Neural Impact-Controller" or ranking_method =="Neural Exposure-Controller"):
                         nn=relevance_network.relevance_estimating_network(len(items[0].get_features()))
                         clicked = popularity >=0 #Items clicked at least twice
                         nn.train(x_test[clicked],np.clip(weighted_popularity[clicked]/count,0,1), epochs=5000)
@@ -879,7 +879,7 @@ def simulate_click(aff_probs, propensities, popularity, weighted_popularity, ran
 
 ##Testing function
 """
-def test_ranking(items, start_popularity, trials = 100, methods = ["Biased-Pop","IPS-Pop"], click_models = ["PBM_log"], save=False, iterations = 2000):
+def test_ranking(items, start_popularity, trials = 100, methods = ["Naive","IPS"], click_models = ["PBM_log"], save=False, iterations = 2000):
     G = assign_groups(items)
     if( len(G) <=3):
 
@@ -917,7 +917,7 @@ def test_ranking(items, start_popularity, trials = 100, methods = ["Biased-Pop",
                 clicks += popularity_hist[-1]
                 exposure += mean_exposure
                 trial_NDCG += fairness_hist["NDCG"]
-                if("Biased-Pop" in method):
+                if("Naive" in method):
                     estimated_relevance += popularity_hist[-1]/iterations
                 else:
                     estimated_relevance += w_pophist[-1]/iterations
@@ -965,8 +965,9 @@ def test_ranking(items, start_popularity, trials = 100, methods = ["Biased-Pop",
     #grouped_bar_plot(statistics, G, [ a + "\n" + b for a in click_models for b in methods])
 
 #Function that simulates and monitor the convergence to the relevance + the developement of cummulative fairness
-def collect_relevance_convergence(items, start_popularity, trials = 100, methods = ["Biased-Pop","IPS-Pop"], click_models = ["PBM_log"], iterations = 2000, plot_individual_fairness = True):
-    global KP, W_FAIR
+def collect_relevance_convergence(items, start_popularity, trials = 100, methods = ["Naive","IPS"], click_models = ["PBM_log"], iterations = 2000, plot_individual_fairness = True):
+    global KP
+    global W_FAIR
     rel_diff = []
     G = assign_groups(items)
     overall_fairness = np.zeros((len(click_models)*len(methods),trials, iterations,4))
@@ -998,7 +999,7 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
                 if "Pers" in method:
                     nn_error_trial.append(errors)
                 #Calculate the relevance difference between true relevance and approximation
-                if(method =="Biased-Pop"):
+                if(method =="Naive"):
                     rel_diff_trial.append(np.mean(np.abs(popularity_hist / (np.arange(iterations)+1)[:,np.newaxis] - (mean_relevances)[np.newaxis,:]),axis=1))
                     if(len(items)>20):
                         before = np.abs(popularity_hist[np.arange(popularity_hist.shape[0])[:,np.newaxis],ranking_hist[:,:20]]/ (np.arange(iterations)+1)[:,np.newaxis] - (mean_relevances[ranking_hist[:,:20]]))
@@ -1017,7 +1018,7 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
                     #Plot Group Clicks and Items Average Rank
                     group_item_clicks(popularity_hist[-1],G)
                     plot_average_rank(ranking_hist,G)
-                    if method =="Biased-Pop":
+                    if method =="Naive":
                         print("Relevance Difference: ", np.sum((mean_relevances - popularity_hist[-1] / (iterations + 1)) ** 2))
                     else:
                         print("Relevance Difference: ", np.sum((mean_relevances -w_pophist[-1]/(iterations+1))**2))
@@ -1026,6 +1027,7 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
                     plt.axis([0, iterations, 0,len(items)])
                     if len(G) <=3:
                         group_colors = {0:"blue",1:"red",2:"black"}
+                        group_labels = {0:"Negative",1:"Positive",2:"black"}
                     else:
                         group_colors = [None for i in range(len(G))]
                     item_rank_path = np.ones((iterations,len(items)))
@@ -1034,7 +1036,13 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
                     for i in range(len(items)):
                         group_color_i = group_colors[[x for x in range(len(G)) if i in G[x]][0]]
                         plt.plot(np.arange(iterations),item_rank_path[:,i], color=group_color_i)
+
+                    custom_lines = [Line2D([0], [0], color="blue", lw=4),
+                                    Line2D([0], [0], color="red", lw=4)]
+
+                    plt.legend(custom_lines, ['Negative', 'Positive'])
                     #plt.show()
+                    plt.legend()
                     plt.savefig( PLOT_PREFIX + "Rankinghistory_"+click_model+"_"+method+".pdf", bbox_inches="tight")
 
             print("Time for " + click_model + " " + method+ " was: {0:.4f}".format(time.time()-start_time))
@@ -1066,7 +1074,7 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
                 rel_tmp = np.asarray(rel_diff_trial[0])
             else:
                 rel_tmp = np.mean(np.asarray(rel_diff_trial),axis=0)
-            rel_diff.append([rel_tmp,click_model.replace("_log","") + " "+ method])
+            rel_diff.append([rel_tmp,  method])
             if(len(items)>20 and False):
                 rel_diff.append((np.mean(np.asarray(rel_diff_top20),axis=0),click_model.replace("_log","") + " "+ method + "top 20"))
 
@@ -1095,8 +1103,9 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
             plt.plot(np.arange(len(y[0])),y[0], label=y[1])
         plt.legend(loc="upper right")
         plt.axis([0,len(y[0]),0,0.3])
-        plt.ylabel("Avg diff between \n True & Estimated Relevance  ")
-        plt.xlabel("Iterations")
+        #plt.ylabel("Avg diff between \n True & Estimated Relevance  ")
+        plt.ylabel(r'$|\hat{Rel} - {Rel}|$')
+        plt.xlabel("Users")
         plt.savefig(PLOT_PREFIX + "Relevance_convergence.pdf", bbox_inches="tight")
         plt.show()
 
@@ -1117,13 +1126,13 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
                 data["clicks"][:,:, a] / data["true_rel"][:,:, a] - data["clicks"][:,:, b] /data["true_rel"][:,:, b])
 
     overall_fairness /= len(pair_group_combinations)
-    plot_unfairness_over_time(overall_fairness, click_models, methods)
+    plot_unfairness_over_time(overall_fairness, click_models, methods, False)
 
 
     fig, ax = plt.subplots()
     ax2 = None
     for i, data in enumerate(run_data):
-        ax2 = plot_NDCG_Unfairness(data["NDCG"], overall_fairness[i,:,:,1], ax =ax, ax2=ax2,  label=labels[i], unfairness_label="Unfairness Exposure")
+        ax2 = plot_NDCG_Unfairness(data["NDCG"], overall_fairness[i,:,:,1], ax =ax, ax2=ax2,  label=labels[i], unfairness_label="Exposure Unfairness")
     ax.legend()
     plt.savefig(PLOT_PREFIX + "NDCG_UnfairExposure.pdf", bbox_inches="tight", dpi=800)
     plt.close("all")
@@ -1132,7 +1141,7 @@ def collect_relevance_convergence(items, start_popularity, trials = 100, methods
     fig, ax = plt.subplots()
     ax2 = None
     for i, data in enumerate(run_data):
-        ax2 = plot_NDCG_Unfairness(data["NDCG"], overall_fairness[i,:,:,3], ax =ax, ax2=ax2,  label=labels[i], unfairness_label="Unfairness Impact")
+        ax2 = plot_NDCG_Unfairness(data["NDCG"], overall_fairness[i,:,:,3], ax =ax, ax2=ax2,  label=labels[i], unfairness_label="Impact Unfairness")
     ax.legend()
     plt.savefig(PLOT_PREFIX + "NDCG_UnfairImpact.pdf", bbox_inches="tight", dpi=800)
     plt.close("all")
@@ -1144,7 +1153,7 @@ def plot_neural_error(errors, labels):
         plt.plot(np.arange(100, len(error)+100), error, label=labels[i])
     plt.legend()
     plt.ylabel("Difference True and estimated relevance")
-    plt.xlabel("Iterations")
+    plt.xlabel("Users")
     plt.savefig(PLOT_PREFIX + "Neural_Error.pdf", bbox_inches="tight")
 
 def plot_click_bar_plot(frac_c,labels, save=False):
@@ -1256,7 +1265,7 @@ def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two 
             color = p[-1].get_color()
             plt.fill_between(np.arange(n), overall_fairness[i,:,0]- fairness_std[i,:,0], overall_fairness[i,:,0] +  fairness_std[i,:,0], alpha=0.4, color=color)
 
-            plt.xlabel("Iterations")
+            plt.xlabel("Users")
             plt.ylabel("Group-Difference of \n Exposure per est. Relevance")
             ax= plt.gca()
             x0,x1 = ax.get_xlim()
@@ -1276,7 +1285,7 @@ def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two 
         x0,x1 = ax.get_xlim()
         y0,y1 = ax.get_ylim()
         ax.set_aspect(abs(x1-x0)/abs(y1-y0))
-        plt.xlabel("Iterations")
+        plt.xlabel("Users")
         plt.ylabel("Group-Difference of \n Exposure per True Relevance")
         if not only_two:
             plt.subplot(143)
@@ -1287,7 +1296,7 @@ def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two 
             plt.fill_between(np.arange(n), overall_fairness[i, :, 2] - fairness_std[i, :, 2],
                              overall_fairness[i, :, 2] + fairness_std[i, :, 2], alpha=0.4, color=color)
 
-            plt.xlabel("Iterations")
+            plt.xlabel("Users")
             plt.ylabel("Group-Difference of \n Clicks per est. Relevance")
             ax= plt.gca()
             x0,x1 = ax.get_xlim()
@@ -1308,7 +1317,7 @@ def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two 
         x0,x1 = ax.get_xlim()
         y0,y1 = ax.get_ylim()
         ax.set_aspect(abs(x1-x0)/abs(y1-y0))
-        plt.xlabel("Iterations")
+        plt.xlabel("Users")
         plt.ylabel("Group-Difference of \n Clicks per True Relevance")
        
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
@@ -1332,7 +1341,7 @@ def plot_fairness_over_time(fairness, G, model):
             plt.axis([0,n,0,0.7])
         else:
             plt.axis([0,n,0,2])
-        if "Biased-Pop" in model:
+        if "Naive" in model:
             fairness["rel"] = fairness["clicks"]
         
         #plt.plot(np.arange(n), fairness["rel"][:,g] / normalize_iter /len(G[g]) , label="Estimated Relevance")
@@ -1348,7 +1357,7 @@ def plot_fairness_over_time(fairness, G, model):
         plt.plot(np.arange(n), fairness["clicks"][:,g] / fairness["rel"][:,g], label="Clicks per est. Relevance")
         plt.plot(np.arange(n), fairness["clicks"][:,g] / fairness["true_rel"][:,g], label="Clicks per True Relevance")
         
-        plt.xlabel("Iterations")
+        plt.xlabel("Users")
         plt.title("Model "+ model + "\n Group " + group_dict[g])
         
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
@@ -1363,7 +1372,7 @@ def plot_fairness_over_time(fairness, G, model):
         plt.title("Model "+ model + "\n Exposure per est. Relevance")
         plt.plot(np.arange(n), fairness["prop"][:,g] / fairness["rel"][:,g], label="Group " + group_dict[g], color=color_dict[g])
         plt.subplot(142)
-        plt.axis([0,n,0,1])
+        #plt.axis([0,n,0,1])
         plt.title("Model "+ model + "\n Exposure per True Relevance")
         plt.plot(np.arange(n), fairness["prop"][:,g] / fairness["true_rel"][:,g], label="Group " + group_dict[g], color=color_dict[g])
         plt.subplot(143)
@@ -1391,8 +1400,10 @@ def plot_ndcg(ndcg, label="", plot=True, figure_name="NDCG", window_size=0, std 
         #moving_average = [np.mean(ndcg[:(i+1)]) for i in range(len(ndcg))]
         moving_average = np.cumsum(ndcg)/np.arange(1,len(ndcg)+1)
         p = plt.plot(np.arange(len(moving_average)), moving_average, label=label, linestyle='-')
-        plt.axis([0, len(moving_average), 0.7, 1])
+        plt.axis([0, len(moving_average), 0.75, 0.9])
         print(np.shape(ndcg), np.shape(moving_average), np.sum(ndcg), np.sum(moving_average))
+
+        plt.ylabel("Avg. Cumulative NDCG")
         if(std is not None):
             color = p[-1].get_color()
             #print(np.shape(std))
@@ -1401,19 +1412,20 @@ def plot_ndcg(ndcg, label="", plot=True, figure_name="NDCG", window_size=0, std 
             plt.fill_between(np.arange(len(moving_average)), moving_average - std, moving_average + std, alpha=0.4, color=color)
     else:
         p =  plt.plot(np.arange(len(ndcg)),ndcg, label = label)
-        plt.axis([0, len(ndcg), 0.7, 1])
+        plt.axis([0, len(ndcg), 0.75, 0.9])
 
         if (std is not None):
             color = p[-1].get_color()
             plt.fill_between(np.arange(len(ndcg)), ndcg - std, ndcg + std, alpha=0.4,
                              color=color)
-    plt.xlabel("Iterations")
-    plt.ylabel("NDCG")
+
+        plt.ylabel("NDCG")
+    plt.xlabel("Users")
     if(plot):
         plt.title("Average NDCG in model " + label)
         plt.show()
 
-def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_label = "Unfairness", ):
+def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_label = "Unfairness", synthetic=False):
     #fig, ax =plt.subplots()
     #plt.figure(figure_name)
     trials, n = np.shape(ndcg)
@@ -1428,26 +1440,35 @@ def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_labe
 
     color = p[-1].get_color()
     ax.set_xlim([0,n])
-    ax.set_ylim([0.7,1])
+    if(synthetic):
+        ax.set_ylim([0.95, 1])
+    else:
+        ax.set_ylim([0.75,0.9])
+    if ax2 is not None:
+        ax2.set_xlim([0,n])
+        if(synthetic):
+            ax2.set_ylim([0, 0.2])
+        else:
+            ax2.set_ylim([0, 0.2])
+        ax2.set_xlabel("Users")
+        ax2.set_ylabel(unfairness_label)
 
     x0, x1 = ax.get_xlim()
     y0, y1 = ax.get_ylim()
     #ax.set_aspect(abs(x1 - x0) / abs(y1 - y0))
 
     ax.fill_between(np.arange(n), cum_ndcg - std_ndcg, cum_ndcg + std_ndcg, alpha=0.4, color=color)
-    ax.set_xlabel("Iterations")
-    ax.set_ylabel("NDCG")
-    if ax2 is None:
-        ax2 = ax.twinx()
-        ax2.set_ylabel(unfairness_label)
-        ax2.set_ylim([0,0.5])
+    ax.set_xlabel("Users")
+    ax.set_ylabel("Avg. Cumulative NDCG")
 
+    if ax2 is not  None:
+        #ax2 = ax.twinx()
         x0, x1 = ax2.get_xlim()
         y0, y1 = ax2.get_ylim()
         #ax2.set_aspect(abs(x1 - x0) / abs(y1 - y0))
         #ax2.set_aspect("equal")
-    ax2.plot(np.arange(n), unfairness, linestyle=':',label=label, color=color)
-    ax2.fill_between(np.arange(n), unfairness - unfairness_std, unfairness + unfairness_std, alpha=0.4, color=color)
+        ax2.plot(np.arange(n),unfairness, label=label, color=color) #, linestyle=':',
+        ax2.fill_between(np.arange(n), unfairness - unfairness_std, unfairness + unfairness_std, alpha=0.4, color=color)
     return ax2
 
 def plot_numerical_relevance(items, alpha = U_ALPHA, beta = U_BETA, u_std = U_STD):
@@ -1473,21 +1494,9 @@ def plot_numerical_relevance(items, alpha = U_ALPHA, beta = U_BETA, u_std = U_ST
     plt.show()
     return np.asarray(relevances)
 
-def test_double_plot():
-    ndcg_1 = [i/1000. for i in range(1000)]
-    ndcg_2 = [(i / 1000.)**2 for i in range(1000)]
-    unfairness_1 = [(1000.-i)/1000 for i in range(1000)]
-    unfairness_2 = [((1000. - i) / 1000)**2 for i in range(1000)]
-    fig, ax = plt.subplots()
-    ax2 = plot_NDCG_Unfairness(ndcg_1, unfairness_1, ax =ax, label="First")
-    plot_NDCG_Unfairness(ndcg_2, unfairness_2, ax =ax, ax2=ax2, label="Second")
-    ax.legend()
-    plt.savefig("NDCG_Test.pdf", bbox_inches="tight", dpi=800)
-    plt.close("all")
-
 
 def experiment_different_starts(load=False):
-    methods = ["Biased-Pop", "IPS-Pop"]
+    methods = ["Naive", "IPS"]
     click_model = "PBM_log"
     starts = [0, 1, 2, 3, 4, 5, 7, 10, 15]
     iterations = 1000
@@ -1567,60 +1576,68 @@ def load_and_plot_all():
     global JOKES
     JOKES = True
     skyline_data = np.load("plots/Jokes/Skyline/Fairness_Data.npy") #Skyline
-    exposure_data = np.load("plots/Jokes/Exposure/Fairness_Data.npy") #Biased Pop, IPS-Pop, Fair-E-IPS-Pop
-    exposure_pers_data = np.load("plots/Jokes/ExposurePers/Fairness_Data.npy") # Biased Pop, IPS-Pers, Fair-E-IPS-Pers
-    impact_data = np.load("plots/Jokes/ImpactPers/Fairness_Data.npy") # Fair-I-IPS-Pop, Fair-I-IPS-Pers
+    exposure_data = np.load("plots/Jokes/Exposure/Fairness_Data.npy") #Naive Pop, IPS, Fair-E-IPS
+    exposure_pers_data = np.load("plots/Jokes/ExposurePers/Fairness_Data.npy") # Naive Pop, Pers, Fair-E-Pers
+    impact_data = np.load("plots/Jokes/ImpactPers/Fairness_Data.npy") # Fair-I-IPS, Fair-I-Pers
 
     synthetic_data = np.load("plots/SynteticOverview/Fairness_Data.npy")
-    """
+
     items = [ Joke(i) for i in np.arange(0,90)]
     G = assign_groups(items, JOKES)
     pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
 
-    #NDCG plot with Biased-Pop, IPS-Pop, IPS-Pers, Skyline
+    #NDCG plot with Naive, IPS, Pers, Skyline
+
     ndcg = [  np.mean(exposure_data[0]["NDCG"],axis=0), np.mean(exposure_data[1]["NDCG"],axis=0), np.mean(exposure_pers_data[1]["NDCG"],axis=0),  np.mean(skyline_data[0]["NDCG"],axis=0)]
     ndcg_std = [exposure_data[0]["NDCG"], exposure_data[1]["NDCG"], exposure_pers_data[1]["NDCG"], skyline_data[0]["NDCG"]]
-    labels = ["Biased-Pop","IPS-Pop","IPS-Pers","Skyline-Pers"]
+    labels = ["Naive","IPS","Pers","Skyline-Pers"]
+    #plt.figure("NDCG", figsize=(15,5))
     for i in range(4):
         plot_ndcg(ndcg[i],labels[i],plot=False,window_size=1,std=ndcg_std[i])
-    plt.legend()
+    plt.legend(ncol=2)
     plt.savefig("plots/Paper_Plots/SkylineNDCG.pdf", bbox_inches="tight", dpi=800)
     plt.show()
     plt.close("all")
-    
-    #Disparity in Exposure 1. Biased-Pop, IPS-Pop, Fair-E-IPS-Pop, 2. IPS-Pop, IPS-Pers, Fair-E-IPS-Pers
+
+    #Disparity in Exposure 1. Naive, IPS, Fair-E-IPS, 2. IPS, Pers, Fair-E-Pers
     
     run_data = [exposure_data[0], exposure_data[1], exposure_data[2], exposure_pers_data[1], exposure_pers_data[2]]
     ndcg_full = [x["NDCG"][:,:7000] for x in run_data]
 
-    labels=["Biased-Pop","IPS-Pop","Fair-E-IPS-Pop","IPS-Pers","Fair-E-IPS-Pers"]
+    labels=["Naive","IPS","Fair-E-IPS","Pers","Fair-E-Pers"]
 
     overall_fairness = get_unfairness_from_rundata(run_data,pair_group_combinations,10,7000)
+    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1,3, 2,4],
+                                     "plots/Paper_Plots/NDCG_UnfairExposure.pdf", 0)
+
+    
+    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],"plots/Paper_Plots/NDCG_UnfairExposurePop.pdf", 0)
+    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [1,3,4],
+    #                                 "plots/Paper_Plots/NDCG_UnfairExposurePers.pdf", 0)
 
 
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],"plots/Paper_Plots/NDCG_UnfairExposurePop.pdf", 0)
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [1,3,4],
-                                     "plots/Paper_Plots/NDCG_UnfairExposurePers.pdf", 0)
 
-    # Disparity in Impact 1. Biased-Pop, IPS-Pop, Fair-I-IPS-Pop, 2. IPS-Pop, IPS-Pers, Fair-I-IPS-Pers
+    # Disparity in Impact 1. Naive, IPS, Fair-I-IPS, 2. IPS, Pers, Fair-I-Pers
 
 
     run_data = [exposure_data[0], exposure_data[1], impact_data[0], exposure_pers_data[1], impact_data[1]]
     ndcg_full = [x["NDCG"][:,:7000] for x in run_data]
-    labels = ["Biased-Pop", "IPS-Pop", "Fair-I-IPS-Pop", "IPS-Pers", "Fair-I-IPS-Pers"]
+    labels = ["Naive", "IPS", "Fair-I-IPS", "Pers", "Fair-I-Pers"]
     overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 10, 7000)
 
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],"plots/Paper_Plots/NDCG_UnfairImpactPop.pdf", 1)
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [1,3,4],
-                                     "plots/Paper_Plots/NDCG_UnfairImpactPers.pdf", 1)
+    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1, 3, 2, 4],"plots/Paper_Plots/NDCG_UnfairImpact.pdf", 1)
+    
+    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],"plots/Paper_Plots/NDCG_UnfairImpactPop.pdf", 1)
+    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [1,3,4],
+    #                                 "plots/Paper_Plots/NDCG_UnfairImpactPers.pdf", 1)
+    
 
-
-    #Unfairness In Impact & Exposure for IPS-Pop, Fair-E-IPS-Pers, Fair-I-IPS-Pers
+    #Unfairness In Impact & Exposure for IPS, Fair-E-Pers, Fair-I-Pers
     run_data = [exposure_data[1],  exposure_pers_data[2], impact_data[1]]
-    labels = ["IPS-Pop", "Fair-E-IPS-Pers", "Fair-I-IPS-Pers"]
+    labels = ["IPS", "Fair-E-Pers", "Fair-I-Pers"]
     overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 10, 7000)
     plot_Exposure_and_Impact_Unfairness(overall_fairness,labels, "plots/Paper_Plots/ImpactVSExposure.pdf")
-    """
+
 
     #Syntethic Data
 
@@ -1628,30 +1645,21 @@ def load_and_plot_all():
     items = [Item(i) for i in np.linspace(-1, 1, 20)] + [Item(i) for i in np.linspace(-1, 0.01, 10)]
     G = assign_groups(items, False)
     pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-    run_data = synthetic_data[:3]
+    run_data = synthetic_data
     ndcg_full = [x["NDCG"][:, :5000] for x in run_data]
-    labels = ["Biased-Pop", "IPS-Pop", "Fair-I-IPS-Pop"]
+    labels = ["Naive", "IPS",  "Fair-I-IPS", "Fair-E-IPS"]
     overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 100, 5000)
 
     combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2],
-                                     "plots/Paper_Plots/NDCG_UnfairImpactSynthetic.pdf", 1)
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],
-                                     "plots/Paper_Plots/NDCG_UnfairExpoosureSynthetic.pdf", 0)
-    run_data = synthetic_data[[0,1,3]]
-    ndcg_full = [x["NDCG"][:, :5000] for x in run_data]
-    labels = ["Biased-Pop", "IPS-Pop", "Fair-E-IPS-Pop"]
-    overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 100, 5000)
-
+                                     "plots/Paper_Plots/NDCG_UnfairImpactSynthetic.pdf", 1, synthetic=True)
     combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2],
-                                     "plots/Paper_Plots/NDCG_UnfairImpactSynthetic2.pdf", 1)
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],
-                                     "plots/Paper_Plots/NDCG_UnfairExpoosureSynthetic2.pdf", 0)
+                                     "plots/Paper_Plots/NDCG_UnfairExposureSynthetic.pdf", 0, synthetic=True)
 
 
 
 def plot_Exposure_and_Impact_Unfairness(overall_fairness, labels, filename):
     n = np.shape(overall_fairness)[2]
-    plt.figure("Unfairness", figsize=(10, 4))
+    plt.figure("Unfairness", figsize=(15, 5))
     fairness_std = np.std(overall_fairness, axis=1)
     overall_fairness = np.mean(overall_fairness, axis=1)
     for i in range(len(labels)):
@@ -1661,43 +1669,48 @@ def plot_Exposure_and_Impact_Unfairness(overall_fairness, labels, filename):
         plt.fill_between(np.arange(n), overall_fairness[i, :, 0] - fairness_std[i, :, 0],
                          overall_fairness[i, :, 0] + fairness_std[i, :, 0], alpha=0.4, color=color)
         ax = plt.gca()
-        ax.set_ylim(0, 0.5)
+        ax.set_ylim(0, 0.2)
         ax.set_xlim(0, n)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
-        ax.set_aspect(abs(x1 - x0) / abs(y1 - y0))
-        plt.xlabel("Iterations")
-        plt.ylabel("Unfairness Exposure")
+        #ax.set_aspect(abs(x1 - x0) / abs(y1 - y0))
+        plt.xlabel("Users")
+        plt.ylabel("Exposure Unfairness")
+        ax.legend()
 
         plt.subplot(122)
         p = plt.plot(np.arange(n), overall_fairness[i, :, 1], label=labels[i])
         color = p[-1].get_color()
         plt.fill_between(np.arange(n), overall_fairness[i, :, 1] - fairness_std[i, :, 1],
                          overall_fairness[i, :, 1] + fairness_std[i, :, 1], alpha=0.4, color=color)
-
         ax = plt.gca()
-        ax.set_ylim(0, 0.5)
+        ax.set_ylim(0, 0.2)
         ax.set_xlim(0, n)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
-        ax.set_aspect(abs(x1 - x0) / abs(y1 - y0))
-        plt.xlabel("Iterations")
-        plt.ylabel("Unfairness Impact")
-
-    plt.legend(loc='upper right')
+        #ax.set_aspect(abs(x1 - x0) / abs(y1 - y0))
+        plt.xlabel("Users")
+        plt.ylabel("Impact Unfairness")
+        ax.legend()
+    #plt.legend(loc=0)# 'upper right')
     plt.savefig(filename, bbox_inches="tight", dpi=800)
 
+    plt.close("all")
 
-def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection, name,  type=0 ):
-    fig, ax = plt.subplots()
-    ax2 = None
-    unfairness_label = "Unfairness Impact" if type == 1 else "Unfairness Exposure"
+def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection, name,  type=0 ,synthetic=False):
+
+    #fig, ax = plt.subplots()
+    #ax2 = None
+    ax = plt.subplot(121)
+    ax2 = plt.subplot(122)
+    unfairness_label = "Impact Unfairness" if type == 1 else "Exposure Unfairness"
     for i in selection:
-        ax2 = plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
-                                   unfairness_label=unfairness_label)
+        #ax2 = plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
+        plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
+                                   unfairness_label=unfairness_label,synthetic=synthetic)
 
-    ax.legend(title="NDCG",loc="upper left")
-    ax2.legend(title="Unfairness", loc ="upper right")
+    ax.legend(ncol=2)#title="NDCG",loc="upper left")
+    ax2.legend(ncol=2)#title="Unfairness", loc ="upper right")
     #ax.legend(title="NDCG", loc="center left")
     #ax2.legend(title="Unfairness", loc="center right")
 
@@ -1742,67 +1755,102 @@ def get_unfairness_from_rundata(run_data, pair_group_combinations, trials=10, it
     return overall_fairness
 
 
-def test_different_population(trials = 10, iterations = 2000):
-    global sample_user 
-    items = [Item(i) for i in np.linspace(-1, 1, 20)]
+def test_different_population(trials = 10, iterations = 2000, load = False):
+    global sample_user
+    global get_numerical_relevances
+    methods = ["IPS", "Fair-I-IPS"]
+    #betas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    betas = np.linspace(0.05,0.5,8)
+
+    if load:
+        all_stats = np.load("data/different_betas2.npy")
+    else:
+        items = [Item(i) for i in np.linspace(-1, 1, 20)]
+        all_stats = []
+        all_users = []
+        for b in betas:
+            sample_user = lambda: sample_user_base(beta=b)
+            get_numerical_relevances = lambda x: get_numerical_relevances_base(x, beta=b)
+            stats, users = run_and_save_final_stats(methods, items, trials, iterations, get_users=True)
+            all_stats.append(stats)
+            all_users.append(users)
+            users = users > 0
+            print(np.mean(users, axis=2))
+
+        all_stats = np.asarray(all_stats)
+        np.save("data/different_betas2.npy", all_stats)
+        np.save("data/different_betasusers.npy", all_users)
 
 
-    betas = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
-    all_stats = []
-    methods = ["IPS-Pop", "Fair-I-IPS-Pop"]
-    for b in betas:
-        sample_user = lambda: sample_user_base(beta=b)
-        stats = run_and_save_final_stats(methods, items,trials, iterations)
-        all_stats.append(stats)
+    user_proportion = [scipy.stats.beta.cdf(0.5,0.5,x) for x in betas]
+    plot_with_errorbar(user_proportion, all_stats, methods, "plots/Paper_Plots/different_betas.pdf", "Proportion Negative")
+    plot_with_errorbar(user_proportion, all_stats, methods, "plots/Paper_Plots/different_betasExposure.pdf",
+                       "Proportion Negative", impact= False)
+def test_different_groups(trials = 10, iterations = 2000, load = False):
+    methods = ["IPS", "Fair-I-IPS"]
+    if load:
+        all_stats = np.load("data/different_groupsize.npy")
+    else:
+        item_list =[ [ Item(-1.* i / ((21.-x))) for i in range(1,21-x)] + [ Item(i / (x+1.)) for i in range(1,x+1)]  for x in range(1,20)]
+        print([len(i) for i in item_list], "should state 20*20")
+        all_stats = []
+        for items in item_list:
+            stats = run_and_save_final_stats(methods, items,trials, iterations)
+            all_stats.append(stats)
 
-    all_stats = np.asarray(all_stats)
-    np.save("data/different_betas.npy", all_stats)
-    plot_with_errorbar(betas, all_stats, methods, "plots/Paper_Plots/different_betas.pdf", "User-Distribution Beta")
-def test_different_groups(trials = 10, iterations = 2000):
-
-    item_list =[ [ Item(-1.* i / ((21.-x))) for i in range(1,21-x)] + [ Item(i / (x+1.)) for i in range(1,x+1)]  for x in range(1,20)]
-    print([len(i) for i in item_list], "should state 20*20")
-    all_stats = []
-    methods = ["IPS-Pop", "Fair-I-IPS-Pop"]
-    for items in item_list:
-        stats = run_and_save_final_stats(methods, items,trials, iterations)
-        all_stats.append(stats)
-
-    all_stats = np.asarray(all_stats)
-    np.save("data/different_groupsize.npy",all_stats)
+        all_stats = np.asarray(all_stats)
+        np.save("data/different_groupsizeLargwe.npy",all_stats)
     fraction = [i / 20. for i in range(1,20)]
     plot_with_errorbar(fraction, all_stats, methods, "plots/Paper_Plots/different_groupsize.pdf", "Percentage Negative")
-
+    plot_with_errorbar(fraction, all_stats, methods, "plots/Paper_Plots/different_groupsizeExposure.pdf", "Percentage Negative",impact=False)
 
 
 def plot_with_errorbar(x, all_stats, methods, filename, x_label, log_x = False, impact=True):
-    fig, ax = plt.subplots()
     x = np.asarray(x)
-    if log_x:
-        ax.set_xscale('log')
-        ax.set_xticks(x)
+
+    plt.figure("Errorbar", figsize=(15, 5))
+    """
+    fig, ax = plt.subplots()
     ax2 = ax.twinx()
+    """
+    ax = plt.subplot(121)
+    ax2 = plt.subplot(122)
+
+    if log_x:
+        #ax.set_xscale('log')
+        ax.set_xscale("symlog", linthreshx= x[0] if x[0] != 0 else x[1])
+        ax.set_xticks(x)
+        ax2.set_xscale("symlog", linthreshx= x[0] if x[0] != 0 else x[1])
+        ax2.set_xticks(x)
+
     ax.set_xlabel(x_label)
+    ax2.set_xlabel(x_label)
     ax.set_ylabel("NDCG")
     if impact:
-        ax2.set_ylabel("Unfairness Impact")
+        ax2.set_ylabel("Impact Unfairness")
+        ax.set_ylim([0.95, 1])
+        #ax.set_ylim([0.7, 1.05])
+        ax2.set_ylim([0, 0.2])
     else:
-        ax2.set_ylabel("Unfairness Exposure")
+        ax2.set_ylabel("Exposure Unfairness")
+        ax2.set_ylim([0, 0.4])
+        #ax2.set_ylim([0, 0.2])
+        #ax.set_ylim([0.85, 1])
+        ax.set_ylim([0.95, 1])
     ax.set_xlim(min(x),max(x))
-    ax2.set_ylim([0, 0.3])
+    ax2.set_xlim(min(x), max(x))
     #ax.set_ylim([0.7, 1])
-    ax.set_ylim([0.9, 1])
 
     for i, m in enumerate(methods):
         ax.errorbar(x *(1. + ((i*2 -1)/100.)), np.mean(all_stats[:, i, :, 0], axis=1), np.std(all_stats[:, i, :, 0], axis=1), label=m)
     for i, m in enumerate(methods):
         if impact:
-            ax2.errorbar(x *(1. + ((i*2 -1)/100.)), np.mean(all_stats[:, i, :, 2], axis=1), np.std(all_stats[:, i, :, 2], axis=1), label=m, linestyle=":")
+            ax2.errorbar(x *(1. + ((i*2 -1)/100.)), np.mean(all_stats[:, i, :, 2], axis=1), np.std(all_stats[:, i, :, 2], axis=1), label=m)#, linestyle=":")
         else:
-            ax2.errorbar(x *(1. + ((i*2 -1)/100.)), np.mean(all_stats[:, i, :, 1], axis=1), np.std(all_stats[:, i, :, 1], axis=1), label=m, linestyle=":")
+            ax2.errorbar(x *(1. + ((i*2 -1)/100.)), np.mean(all_stats[:, i, :, 1], axis=1), np.std(all_stats[:, i, :, 1], axis=1), label=m)#, linestyle=":")
 
-    ax.legend(title="NDCG", loc="center left")
-    ax2.legend(title="Unfairness", loc="center right")
+    ax.legend( loc=0)# title="NDCG",loc="center left")
+    ax2.legend( loc=0)#title="Unfairness", loc="center right")
     plt.savefig(filename, bbox_inches="tight", dpi=800)
     plt.close("all")
 
@@ -1813,34 +1861,73 @@ def load_and_plot_lambda_comparison():
     pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
 
     trials, iterations = 10, 2000
-    methods = ["Fair-I-IPS-LP", "Fair-I-IPS-Pop"]
+    methods = ["Fair-I-IPS-LP", "Fair-I-IPS"]
     n = len(methods)
-    data = np.load("plots/LambdaTest/Fairness_Data.npy") # Fair-I-IPS-LP [0,2,4,6,8]  Fair-I-IPS-Pop [1,3,5,7,9] lambda 0.0001, 0.001, 0.01, 0.1, 10
-    data100 = np.load("plots/LambdaTest/Fairness_Data100.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS-Pop [1]   lambda 100
-    data1 = np.load("plots/LambdaTest/Fairness_Data1.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS-Pop [1]   lambda 1
-    #TODO import IPS-Pop as baseline?
-    data = np.concatenate((data, data1, data100))
-    x = [0.0001, 0.001, 0.01, 0.1, 1, 10, 100 ] # , 1
+    data = np.load("plots/LambdaTest/Fairness_Data.npy") # Fair-I-IPS-LP [0,2,4,6,8]  Fair-I-IPS [1,3,5,7,9] lambda 0.0001, 0.001, 0.01, 0.1, 10
+    data100 = np.load("plots/LambdaTest/Fairness_Data100.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS [1]   lambda 100
+    data1 = np.load("plots/LambdaTest/Fairness_Data1.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS [1]   lambda 1
+    data1000 = np.load("plots/LambdaTest/Fairness_Data1000.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS [1]   lambda 1000, 10000
+    """
+    #TODO import IPS as baseline?
+    data = np.concatenate((data, data1, data100, data1000))
+    x = [0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000,10000 ] # , 1
     data[[8,9,10,11]] = data[[10,11,8,9]]
-    all_stats = np.zeros((len(data)//2, len(methods), trials, 3))
+    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdacomparison")
+
+
+    data = np.load("plots/LambdaTest/Fairness_DataExposure.npy")
+    items = [Item(i) for i in np.linspace(-1, 1, 10)] +[Item(i) for i in np.linspace(-1, -0.01, 5)]
+    G = assign_groups(items, False)
+    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
+    x = [0.1, 1, 10, 100, 1000]
+    methods = ["Fair-E-IPS-LP", "Fair-E-IPS"]
+    trials, iterations = 5, 2000
+    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaExposurecomparison")
+
+
+    data = np.load("plots/LambdaTest/Fairness_DataExposureNoCompensate.npy")
+    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaExposureNoCompensate")
+
+    data = np.load("plots/LambdaTest/Fairness_DataAllComparisons.npy")
+
+    methods = ["Fair-I-IPS-LP", "Fair-I-IPS"]
+    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaImpactAllComparisonsOld")
+    """
+
+    data = np.load("plots/LambdaTest/Fairness_Data_Final.npy")
+
+    trials, iterations = 10, 2000
+    x = [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000]
+    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaImpactAllComparisons_final")
+
+def plot_lambda_comparison(x,data, methods, trials, pair_group_combinations,name ):
+
+    n = len(methods)
+    all_stats = np.zeros((len(data) // 2, len(methods), trials, 3))
     for j in range(len(data)):
-        all_stats[j//n, j%n, :, 0] = data[j]["NDCG"][:,-1]
+        all_stats[j // n, j % n, :, 0] = data[j]["NDCG"][:, -1]
 
         for a, b in pair_group_combinations:
-            all_stats[j//n, j%n, :, 1] += np.abs(data[j]["prop"][:,-1, a] / data[j]["true_rel"][:,-1, a] -
-                                           data[j]["prop"][:,-1, b] / data[j]["true_rel"][:,-1, b])
+            all_stats[j // n, j % n, :, 1] += np.abs(data[j]["prop"][:, -1, a] / data[j]["true_rel"][:, -1, a] -
+                                                     data[j]["prop"][:, -1, b] / data[j]["true_rel"][:, -1, b])
 
-            all_stats[j//n, j%n, :, 2] += np.abs(data[j]["clicks"][:,-1, a] / data[j]["true_rel"][:,-1, a] -
-                                           data[j]["clicks"][:,-1, b] / data[j]["true_rel"][:,-1, b])
-    all_stats[:,:,:,1:] /= len(pair_group_combinations)
+            all_stats[j // n, j % n, :, 2] += np.abs(data[j]["clicks"][:, -1, a] / data[j]["true_rel"][:, -1, a] -
+                                                     data[j]["clicks"][:, -1, b] / data[j]["true_rel"][:, -1, b])
+    all_stats[:, :, :, 1:] /= len(pair_group_combinations)
     print("allstats shape", np.shape(all_stats))
-    plot_with_errorbar(x, all_stats, ["Fair-I-IPS-LP","Fair-I-IPS-Pop"], "plots/Paper_Plots/lambdacomparison.pdf", r'$\lambda $', log_x= True)
-    plot_with_errorbar(x, all_stats, ["Fair-I-IPS-LP", "Fair-I-IPS-Pop"], "plots/Paper_Plots/lambdacomparisonExposure.pdf",
-                       r'$\lambda $', log_x=True, impact= False)
-def run_and_save_final_stats(methods, items, trials=10, iterations=2000):
+    plot_with_errorbar(x, all_stats, methods, "plots/Paper_Plots/"+ name+ ".pdf",
+                       r'$\lambda $', log_x=True)
+    plot_with_errorbar(x, all_stats, methods,
+                       "plots/Paper_Plots/" + name+ "Exposure.pdf",
+                       r'$\lambda $', log_x=True, impact=False)
+
+
+def run_and_save_final_stats(methods, items, trials=10, iterations=2000, get_users = False):
     click_model = "PBM_log"
     final_stats = np.zeros((len(methods),trials,3))
     run_data=[]
+    if get_users:
+        user_distribution = np.zeros((len(methods),trials,iterations))
     for m, method in enumerate(methods):
         for i in range(trials):
             # shuffler = np.random.permutation(len(items))
@@ -1853,7 +1940,8 @@ def run_and_save_final_stats(methods, items, trials=10, iterations=2000):
                 simulate(popularity, items, ranking_method=method, click_model=click_model, iterations=iterations)
 
             final_stats[m,i,0] = fairness_hist["NDCG"][-1]
-
+            if get_users:
+                user_distribution[m,i,:] = np.asarray([u[0] for u in users])
             for a, b in pair_group_combinations:
                 final_stats[m, i, 1] += np.abs(fairness_hist["prop"][-1,a] / fairness_hist["true_rel"][-1, a] -
                                                fairness_hist["prop"][-1, b] / fairness_hist["true_rel"][-1,b])
@@ -1863,43 +1951,44 @@ def run_and_save_final_stats(methods, items, trials=10, iterations=2000):
 
 
     final_stats[:,:,1:] /= len(pair_group_combinations)
-
+    if get_users:
+        return final_stats , user_distribution
     return final_stats
-
 def __main__():
     global PLOT_PREFIX
-    #overview = test_ranking(items, popularity, trials, click_models=["PBM_log"], methods=["Biased-Pop", "IPS-Pop", "P-Controller"], save = True, iterations=5000)
+
+    #overview = test_ranking(items, popularity, trials, click_models=["PBM_log"], methods=["Naive", "IPS", "P-Controller"], save = True, iterations=5000)
     #print(tabulate(overview, headers='keys', tablefmt='psql'))
 
     #experiment_different_starts(True)
     load_and_plot_all()
-    #test_different_groups(10, 2000)
-    #test_different_population(10, 2000)
+    #test_different_population(10, 20000, True)
+    #test_different_groups(40, 2000,False) #Maybe redo with more trials.
     #load_and_plot_lambda_comparison() #Runs the plotting of the Controller/LP for different lambdas
 
     """
-
     items = [Item(i) for i in np.linspace(-1, 1, 20)] +[Item(i) for i in np.linspace(-1, 0.01, 10)]
+    #items = [Item(i) for i in np.linspace(-1, 1, 10)] + [Item(i) for i in np.linspace(-1, -0.01, 5)]
     popularity = np.ones(len(items))
     G = assign_groups(items, False)
     trials = 10
     iterations = 2000
     #PLOT_PREFIX = "plots/LambdaTest100/"
-    PLOT_PREFIX = "plots/LambdaTest1000/"
+    PLOT_PREFIX = "plots/LambdaFinal/"
     #click_models = ["lambda0.0001", "lambda0.001", "lambda0.01","lambda0.1""lambda1", "lambda10"]
-    click_models = ["lambda1000","lambda10000"]
+    #click_models = ["lambda1000","lambda10000"]
+    click_models = ["lambda0","lambda0.0001", "lambda0.001", "lambda0.01","lambda0.1","lambda1", "lambda10","lambda100","lambda1000"]
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=click_models,
-                                  methods=["Fair-I-IPS-LP", "Fair-I-IPS-Pop"], iterations=iterations,
+                                  methods=["Fair-I-IPS-LP", "Fair-I-IPS"], iterations=iterations,
                                   plot_individual_fairness=False)
-    
 
     PLOT_PREFIX = "plots/SynteticOverview/"
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=["Biased-Pop", "IPS-Pop","Fair-I-IPS-Pop", "Fair-E-IPS-Pop"], iterations=iterations,
+                                  methods=["Naive", "IPS","Fair-I-IPS", "Fair-E-IPS"], iterations=iterations,
                                   plot_individual_fairness=False)
 
     items = [Item(i) for i in np.linspace(-1, 1, 20)]
@@ -1908,7 +1997,7 @@ def __main__():
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=["Biased-Pop", "IPS-Pop"], iterations=iterations,
+                                  methods=["Naive", "IPS"], iterations=iterations,
                                   plot_individual_fairness=False)
 
     items = [ Joke(i) for i in np.arange(0,90)]
@@ -1920,13 +2009,13 @@ def __main__():
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=[ "Biased-Pop", "IPS-Pop", "Fair-E-IPS-Pop"], iterations=iterations, plot_individual_fairness = False)
+                                  methods=[ "Naive", "IPS", "Fair-E-IPS"], iterations=iterations, plot_individual_fairness = False)
 
     PLOT_PREFIX = "plots/ExposurePers/"
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=["Biased-Pop", "IPS-Pers", "Fair-E-IPS-Pers"],
+                                  methods=["Naive", "Pers", "Fair-E-Pers"],
                                   iterations=iterations, plot_individual_fairness=False)
 
     
@@ -1937,14 +2026,14 @@ def __main__():
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
                                   methods=["Skyline-Pers"], iterations=iterations, plot_individual_fairness = False)
 
-    load Skyline[0],  Exposure [0,1](Biased Pop, IPS-Pop) ExposurePers[1] (IPS-Pers) For NDCG Convergence
+    load Skyline[0],  Exposure [0,1](Naive Pop, IPS) ExposurePers[1] (Pers) For NDCG Convergence
 
     iterations = 7000
     PLOT_PREFIX = "plots/ImpactPers/"
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=["Fair-I-IPS-Pop",  "Fair-I-IPS-Pers"], iterations=iterations, plot_individual_fairness = False)
+                                  methods=["Fair-I-IPS",  "Fair-I-Pers"], iterations=iterations, plot_individual_fairness = False)
 
 
     """
@@ -1956,15 +2045,15 @@ def __main__():
         os.makedirs(PLOT_PREFIX)
 
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                             methods=["Biased-Pop", "IPS-Pop", "Fair-I-IPS-Pop", "Fair-I-IPS-Pers"], iterations=iterations, plot_individual_fairness = False)
+                             methods=["Naive", "IPS", "Fair-I-IPS", "Fair-I-Pers"], iterations=iterations, plot_individual_fairness = False)
 
 
     PLOT_PREFIX = "plots/NeuralComparison/"
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=["Biased-Pop", "IPS-Pop", "IPS-Pers", "Skyline-Pers"], iterations=iterations,
-                                  #methods=["IPS-Pop"], iterations=5000,  #
+                                  methods=["Naive", "IPS", "Pers", "Skyline-Pers"], iterations=iterations,
+                                  #methods=["IPS"], iterations=5000,  #
                                   plot_individual_fairness=False)
 
 
