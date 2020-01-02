@@ -12,17 +12,20 @@ from keras import regularizers
 
 class relevance_estimating_network:
 
-    def __init__(self, input_dim = 2, output_dim = 1, hidden_units = 16, joke = False, supervised = False ):
+    def __init__(self, input_dim = 2, output_dim = 1, hidden_units = 16, joke = False, supervised = False, news = False ):
         self.joke = joke
+        self.news = news
         self.supervised = supervised
         self.model = keras.models.Sequential()
         if hidden_units == 0 or joke:
             self.model.add(Dense(output_dim, input_shape=(input_dim,), activation='sigmoid'))
         else:
             self.model.add(Dense(hidden_units,input_shape=(input_dim,), activation = 'relu'))
+            #self.model.add(Dense(hidden_units, input_shape=(hidden_units,), activation='relu'))
             self.model.add(Dense(output_dim, activation = 'sigmoid'))
+            #self.model.add(Dense(output_dim, activation='relu'))
 
-        if joke and not supervised:
+        if (joke or news) and not supervised:
             self.model.compile(optimizer="adam", loss=self.unbiased_loss, metrics=[self.unbiased_loss])
         else:
             self.model.compile(optimizer="adam",loss="mse", metrics=['mse'])
@@ -45,7 +48,7 @@ class relevance_estimating_network:
         return self.model.evaluate(x_test,y_test,batch_size = len(x_test))
 
     def predict(self, features):
-        if self.joke:
+        if self.joke or self.news:
             if len(np.shape(features))==1:
                 result = self.model.predict(features[np.newaxis,:]).flatten()
             else:
