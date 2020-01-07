@@ -100,31 +100,42 @@ def load_movie_data(n_movies=100, n_user=10000, n_company=5):
         temp2 = temp[[g_id in x for x in temp["genres"]]]
         ids = [user_id_to_idx[x] for x in temp2["userId"].unique()]
         user_features[ids, j] = temp2.groupby('userId')["rating"].mean()
-    """
-    #Create a single Ranking Matrix
-    ranking_matrix = np.zeros((n_user,n_movies))
+
+    #Create a single Ranking Matrix, only relevance for rated movies
+
+    #Leave it incomplete
+    ranking_matrix = np.zeros((n_user, n_movies))
     movie_id_to_idx = {}
+    movie_idx_to_id = []
     for i, movie in enumerate(y["id"]):
         movie_id_to_idx[movie] = i
+        movie_idx_to_id.append(movie)
         single_movie_ratings = ratings[ratings["movieId"].isin([movie])]
         ranking_matrix[[user_id_to_idx[x] for x in single_movie_ratings["userId"]], i] = single_movie_ratings["rating"]
-    """
+    #Group(movie) = Company(movie)
+    groups = [comp_dict[y[y["id"].isin([x])]["production_companies"].to_list()[0]] for x in movie_idx_to_id ]
+
     #Matrix Faktorization
     """engine = mf.MF(nr_iters=50, k= 20, quiet=True)
     engine.fit([[x, y, ranking_matrix[x, y]] for x, y in zip(*ranking_matrix.nonzero())])
     full_matrix = engine.predict(np.asarray([[i,j] for i in range(n_user) for j in range(n_movies)]))
     """
+
     algo = surprise.SVD(biased=False)
     reader = surprise.Reader(rating_scale=(0.5, 5))
     surprise_data = surprise.Dataset.load_from_df(ratings[["userId", "movieId", "rating"]], reader).build_full_trainset()
     algo.fit(surprise_data)
 
     full_matrix = np.dot(algo.pu, algo.qi.T)
-    full_matrix = np.clip(full_matrix, 0.5, 5)
-
+    #full_matrix = np.clip(full_matrix, 0.5, 5)
     movie_idx_to_id = [surprise_data.to_raw_iid(x) for x in range(n_movies)]
     groups = [comp_dict[y[y["id"].isin([x])]["production_companies"].to_list()[0]] for x in movie_idx_to_id ]
 
+    features_matrix_factorization = algo.pu
+
+
+    feature_movie_watched = np.zeros((n_user,n_movies))
+    feature_movie_watched[np.nonzero(ranking_matrix)] = 1
 
     po = ratings["userId"].value_counts()
     po2 = ratings["movieId"].value_counts()
@@ -132,16 +143,29 @@ def load_movie_data(n_movies=100, n_user=10000, n_company=5):
     print("The most rated movie has {} votes, the least {} votes; mean {}".format(po2.max(), po2.min(), po2.mean()))
     print("The most rating user rated {} movies, the least {} movies; mean {}".format(po.max(), po.min(), po.mean()))
 
-    assert(np.shape(full_matrix)==(n_user,n_movies))
+    assert(np.shape(ranking_matrix)==(n_user,n_movies))
     assert(np.shape(groups) == (n_movies,))
     assert(np.shape(user_features)[0] == n_user)
 
 
     #Transform matrix to click probability
-    full_matrix = np.clip( (full_matrix-1) / 4, a_min=0)
+    #ranking_matrix = np.clip( (ranking_matrix-1) / 4, a_min=0, a_max=1)
+    ranking_matrix = np.clip((full_matrix - 1) / 4, a_min=0, a_max=1)
+
+    #user_features = features_matrix_factorization
+    user_features /= 5
+
+
+    user_features = np.concatenate((user_features,feature_movie_watched),axis=1)
+    print(np.shape(user_features))
+    np.save("data/movie_data_full_120features.npy", [ranking_matrix, user_features, groups])
+    return ranking_matrix, user_features, groups
+
+def load_movie_data_saved(filename ="data/movie_data_prepared.npy"):
+    full_matrix, user_features, groups = np.load(filename)
     return full_matrix, user_features, groups
 
-git push -u origin master
+
 def filter_to_small(ratings, id, n):
     x = ratings[id].value_counts()
     x = x[x>=n]

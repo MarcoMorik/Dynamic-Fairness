@@ -17,7 +17,7 @@ class relevance_estimating_network:
         self.news = news
         self.supervised = supervised
         self.model = keras.models.Sequential()
-        if hidden_units == 0 or joke:
+        if hidden_units == 0:# or joke:
             self.model.add(Dense(output_dim, input_shape=(input_dim,), activation='sigmoid'))
         else:
             self.model.add(Dense(hidden_units,input_shape=(input_dim,), activation = 'relu'))
@@ -36,7 +36,7 @@ class relevance_estimating_network:
 
 
     def train(self,features, relevances, x_test=None,y_test=None, epochs = 5000):
-        self.model.fit(features,relevances, batch_size = len(features), verbose=0, epochs = epochs)
+        self.model.fit(features, relevances, batch_size = len(features), verbose=0, epochs = epochs)
         train_score = self.model.evaluate(features,relevances,batch_size = len(features),verbose=0)
 
         #print("Training performance:" , train_score, "with {} items and {} avg. relevance".format(len(features),sum(relevances)/len(relevances)))
