@@ -3,18 +3,12 @@ import pandas as pd
 import numpy as np
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-import tensorflow as tf
-import torch
-import torch.nn as tnn
-import torch.nn.functional as F
-from torch import optim
-import keras
-from keras.layers import Dense
-from keras import regularizers
+from config import ex
 #from scipy.sparse.linalg import svd
 
 import surprise
+sigmoid = lambda x: 1. / (1. + np.exp(-(x - 3) / 0.1))
+
 
 def load_data():
     df = pd.read_excel("data/jester-data-1.xls",header=None)
@@ -62,45 +56,42 @@ def load_news_data(seed=18):
 
     return df, df_small, df_tiny
 
-
-def load_movie_data(n_movies=100, n_user=10000, n_company=5):
-    x = pd.read_csv("data/movies_metadata.csv")[["production_companies", "id", "genres"]]
-    x = x.drop([19730, 29503, 35587]) # No int id
-
-    sigmoid = lambda x: 1./(1. + np.exp(-(x-3) / 0.1))
+def define_genre(meta_data):
 
     #Defining Genres
+    #Generates a List of Lists of Movies in each Genre
     genres = []
     movie_g_id = []
-    for ge in x["genres"]:
+    for ge in meta_data["genres"]:
         movie_g_id.append([])
         for temp in eval(ge):
             movie_g_id[-1].append(temp["id"])
             if temp not in genres:
                 genres.append(temp)
     g_idx = [g["id"] for g in genres]
-    x["genres"] = x["genres"].map(lambda xx: [xxx["id"] for xxx in eval(xx)])
+    #Modify the Genres according to the Group Id.
+    meta_data["genres"] = meta_data["genres"].map(lambda xx: [xxx["id"] for xxx in eval(xx)])
+    return meta_data, g_idx
 
-    #Selecting Companies
-    # MGM, Warner Bros, Paramount, 20th Fox, Universal (x2), Columbia (x2), Disney (x2)134523351
-    #selected_companies = [1, 2, 3, 4, 5, 11, 7,8, 10, 12]
-    #comp_to_group = [0,1,2,3,4,4,5,5,6,6]
+def select_companies(meta_data):
+    # Selecting Companies
+    # MGM, Warner Bros, Paramount, 20th Fox, Columbia (x2)
+    # 5 Movie Companies with most user ratings
     selected_companies = [1, 2, 3, 4, 7, 8]
-    comp_to_group = [0,1,2,3,4,4]
+    comp_to_group = [0, 1, 2, 3, 4, 4]
 
-    #comp = x["production_companies"].value_counts().index[1:n_company+1]
-    comp = x["production_companies"].value_counts().index[selected_companies]
-    comp_dict = dict([(x,comp_to_group[i]) for i,x in enumerate(comp)])
-    x = x.astype({"id": "int"})
-    y = x[x["production_companies"].isin(comp)]
+    comp = meta_data["production_companies"].value_counts().index[selected_companies]
+    comp_dict = dict([(x, comp_to_group[i]) for i, x in enumerate(comp)])
+    meta_data = meta_data.astype({"id": "int"})
+    meta_data = meta_data[meta_data["production_companies"].isin(comp)]
 
-    #Load Ratings
-    ratings_full = pd.read_csv("data/ratings.csv")
-    ratings = ratings_full[ratings_full["movieId"].isin(y["id"])]
+    return meta_data, comp_dict
+
+def select_movies(ratings, meta_data, n_movies = 100, n_user= 10000):
 
     # Use the 100 Movies with the most ratings
     po2 = ratings["movieId"].value_counts()
-    print("The minimum number of ratings:", po2.index[n_movies*3])
+
     #Select the n_movies with highest variance
     var_scores = [np.std(ratings[ratings["movieId"].isin([x])]["rating"]) for x in po2.index[:(n_movies*3)]]
     var_sort = np.argsort(var_scores)[::-1]
@@ -108,31 +99,36 @@ def load_movie_data(n_movies=100, n_user=10000, n_company=5):
     selected_movies = po2.index[var_sort[:n_movies]]
     #selected_movies =po2.index[:n_movies]
     ratings = ratings[ratings["movieId"].isin(selected_movies)]
-    y = y[y["id"].isin(selected_movies)]
-
-
+    meta_data = meta_data[meta_data["id"].isin(selected_movies)]
 
     po = ratings["userId"].value_counts()
 
     ratings = ratings[ratings["userId"].isin(po.index[:n_user])] # remove users with less than 10 votes
-    y = y[y["id"].isin(ratings["movieId"].value_counts().index[:])]
+    meta_data = meta_data[meta_data["id"].isin(ratings["movieId"].value_counts().index[:])]
 
+    return ratings, meta_data
 
-    #Generate User Features (Mean rating on each movie Genre)
+def get_user_features_genre(ratings, ratings_full, meta_data, n_user, g_idx):
+    # Generate User Features (Mean rating on each movie Genre)
     n_user = len(ratings["userId"].unique())
     user_features = np.zeros((n_user, len(g_idx)))
     user_id_to_idx = dict(zip(sorted(ratings["userId"].unique()), np.arange(n_user)))
-    temp = pd.merge(ratings_full[ratings_full["userId"].isin(ratings["userId"].unique())], x, left_on="movieId", right_on="id")
+    temp = pd.merge(ratings_full[ratings_full["userId"].isin(ratings["userId"].unique())], meta_data, left_on="movieId",
+                    right_on="id")
     for j, g_id in enumerate(g_idx):
         temp2 = temp[[g_id in x for x in temp["genres"]]]
         ids = [user_id_to_idx[x] for x in temp2["userId"].unique()]
         user_features[ids, j] = temp2.groupby('userId')["rating"].mean()
 
+    return user_features
 
-    #Create a single Ranking Matrix, only relevance for rated movies
-    #Leave it incomplete
-    #ranking_matrix = np.zeros((n_user, n_movies))
-    ranking_matrix = np.zeros((n_user, len(y["id"])))
+def get_ranking_matrix_incomplete(ratings, meta_data, n_user):
+
+    user_id_to_idx = dict(zip(sorted(ratings["userId"].unique()), np.arange(n_user)))
+    # Create a single Ranking Matrix, only relevance for rated movies
+    # Leave it incomplete
+    # ranking_matrix = np.zeros((n_user, n_movies))
+    ranking_matrix = np.zeros((n_user, len(meta_data["id"])))
     movie_id_to_idx = {}
     movie_idx_to_id = []
     print(np.shape(ranking_matrix))
@@ -140,87 +136,98 @@ def load_movie_data(n_movies=100, n_user=10000, n_company=5):
         movie_id_to_idx[movie] = i
         movie_idx_to_id.append(movie)
         single_movie_ratings = ratings[ratings["movieId"].isin([movie])]
-        ranking_matrix[[user_id_to_idx[x] for x in single_movie_ratings["userId"]], i] = single_movie_ratings["rating"]
+        ranking_matrix[[user_id_to_idx[x] for x in single_movie_ratings["userId"]], i] = single_movie_ratings[
+            "rating"]
 
-    #Group(movie) = Company(movie)
-    #groups = [comp_dict[y[y["id"].isin([x])]["production_companies"].to_list()[0]] for x in movie_idx_to_id ]
-
-    #Matrix Faktorization
+    return ranking_matrix
+def get_matrix_factorization(ratings, meta_data, n_user, n_movies):
+    # Matrix Faktorization
     algo = surprise.SVD(n_factors=50, biased=False)
     reader = surprise.Reader(rating_scale=(0.5, 5))
-    surprise_data = surprise.Dataset.load_from_df(ratings[["userId", "movieId", "rating"]], reader).build_full_trainset()
+    surprise_data = surprise.Dataset.load_from_df(ratings[["userId", "movieId", "rating"]],
+                                                  reader).build_full_trainset()
     algo.fit(surprise_data)
 
     pred = algo.test(surprise_data.build_testset())
-    print("MSE: ",surprise.accuracy.mse(pred))
+    print("MSE: ", surprise.accuracy.mse(pred))
     print("RMSE: ", surprise.accuracy.rmse(pred))
 
-    full_matrix = np.dot(algo.pu, algo.qi.T)
-    #full_matrix = np.clip(full_matrix, 0.5, 5)
+    ranking_matrix = np.dot(algo.pu, algo.qi.T)
+    # ranking_matrix = np.clip(ranking_matrix, 0.5, 5)
 
-    #Select subset with highest variance
-    #std_movies = np.std(algo.qi, axis=1)
-    #print(np.shape(std_movies), "should be > 100")
-    #movies_to_pick = np.argsort(std_movies)[:n_movies]
-
-    #movie_idx_to_id = [surprise_data.to_raw_iid(x) for x in movies_to_pick]
+    # movie_idx_to_id = [surprise_data.to_raw_iid(x) for x in movies_to_pick]
     movie_idx_to_id = [surprise_data.to_raw_iid(x) for x in range(n_movies)]
-    groups = [comp_dict[y[y["id"].isin([x])]["production_companies"].to_list()[0]] for x in movie_idx_to_id ]
-
     features_matrix_factorization = algo.pu
     print("Means: ", np.mean(features_matrix_factorization), np.mean(algo.qi.T))
     print("Feature STD:", np.std(features_matrix_factorization), np.std(algo.qi))
-    print("Full Matrix Shape", np.shape(full_matrix), "rankinG_shape", np.shape(ranking_matrix))
+    print("Full Matrix Shape", np.shape(ranking_matrix), "rankinG_shape", np.shape(ranking_matrix))
 
+    return ranking_matrix, features_matrix_factorization, movie_idx_to_id
+
+@ex.capture
+def load_movie_data(n_movies, n_user, n_company, movie_features, movie_ranking_sample_file =None):
+    """
+    Loads the Movie Dataset
+    Preprocesses
+    Generate Rating Matrices with Matrix Factoriation
+    Sample Rankings from those Matrices.
+    """
+    #Loading Meta Data from the Movies
+    meta_data = pd.read_csv("data/movies_metadata.csv")[["production_companies", "id", "genres"]]
+    #Delete Movies with Date as ID
+    meta_data = meta_data.drop([19730, 29503, 35587]) # No int id
+
+    #Get Genres
+    meta_data, g_idx = define_genre(meta_data)
+
+    #Filter by Production Company to obtain 5 Groups
+    meta_data, comp_dict = select_companies(meta_data)
+
+    #Y = meta data from selected Companies
+
+    #Load Ratings
+    ratings_full = pd.read_csv("data/ratings.csv")
+    ratings = ratings_full[ratings_full["movieId"].isin(meta_data["id"])]
+    ratings, meta_data = select_movies(ratings, meta_data, n_movies, n_user)
+
+    #Complete Ranking Matrix
+    ranking_matrix = get_ranking_matrix_incomplete(ratings, meta_data, n_user)
+    full_matrix, features_matrix_factorization, movie_idx_to_id = get_matrix_factorization(ratings, meta_data, n_user, n_movies)
+    #Add the real rating for already rated movies
     full_matrix[np.nonzero(ranking_matrix)] = ranking_matrix[np.nonzero(ranking_matrix)]
 
-    #full_matrix = full_matrix[:,movies_to_pick]
-    #print("Full Matrix Shape after slicing", np.shape(full_matrix))
-    #feature_movie_watched = np.zeros((n_user,n_movies))
-    #feature_movie_watched[np.nonzero(ranking_matrix)] = 1
+    if movie_features == "factorization":
+        user_features = features_matrix_factorization
+    else:
+        user_features = get_user_features_genre(ratings,ratings_full, meta_data, n_user,g_idx)
 
-    n_user = 10000
-    #user_subset = [user_id_to_idx[id] for id in po.index[:n_user]]
-    #full_matrix = full_matrix[user_subset,:]
-    #features_matrix_factorization = features_matrix_factorization[user_subset, :]
+    #Generate Probability Matrix
+    #ranking_matrix = np.clip((full_matrix - 1) / 4, a_min=0, a_max=1)
+    prob_matrix = sigmoid(full_matrix)
+
+    groups = [comp_dict[meta_data[meta_data["id"].isin([x])]["production_companies"].to_list()[0]] for x in
+              movie_idx_to_id]
 
     po = ratings["userId"].value_counts()
     po2 = ratings["movieId"].value_counts()
-
     print("Number of Users", len(po.index), "Number of Movies", len(po2.index))
     print("the Dataset before completion is", len(ratings) / float(n_user*n_movies), " filled")
     print("The most rated movie has {} votes, the least {} votes; mean {}".format(po2.max(), po2.min(), po2.mean()))
     print("The most rating user rated {} movies, the least {} movies; mean {}".format(po.max(), po.min(), po.mean()))
 
-    #assert(np.shape(ranking_matrix)==(n_user,n_movies))
+    #The list of groups contains all movies
     assert(np.shape(groups) == (n_movies,))
-    #assert(np.shape(user_features)[0] == n_user)
+    if movie_ranking_sample_file:
+        for i in range(10):
+            random_matrix = np.random.rand(n_user, n_movies)
+            np.save(movie_ranking_sample_file+"{}.npy".format(i), [np.asarray(prob_matrix > random_matrix, dtype=np.float16),user_features, groups])
 
-
-    #Transform matrix to click probability
-    #ranking_matrix = np.clip( (ranking_matrix-1) / 4, a_min=0, a_max=1)
-    #user_features /= 53
-
-    user_features = features_matrix_factorization
-
-    #ranking_matrix = np.clip((full_matrix - 1) / 4, a_min=0, a_max=1)
-    ranking_matrix = sigmoid(full_matrix)
-
-    #random_matrix = np.random.rand(n_user, n_movies)
-    #ranking_matrix = np.asarray(ranking_matrix > random_matrix, dtype=np.float16) # Discretize
-
-    for i in range(10):
-        random_matrix = np.random.rand(n_user, n_movies)
-        #random_matrix = np.ones((n_user, n_movies)) * 0.5
-        np.save("data/movie_data_binary_latent_5Comp_trial{}.npy".format(i), [np.asarray(ranking_matrix > random_matrix, dtype=np.float16), user_features, groups])
-    #user_features = features_matrix_factorization
-
-    #user_features = np.concatenate((user_features,feature_movie_watched),axis=1)
-    print(np.shape(user_features))
-    np.save("data/movie_data_filled_5Comp.npy", [ranking_matrix, user_features, groups])
-    return ranking_matrix, user_features, groups
+    return prob_matrix, user_features, groups
 
 def load_movie_data_saved(filename ="data/movie_data_prepared.npy"):
+    """
+    Load an already created Movie Rating Matrix
+    """
     full_matrix, user_features, groups = np.load(filename, allow_pickle=True)
     return full_matrix, user_features, groups
 
@@ -231,7 +238,11 @@ def filter_to_small(ratings, id, n):
     return ratings[ratings[id].isin(x.index)]
 
 
+
+#Looking for Group of Movies with at N Users rating all of them
 def find_biclique(ratings, sol = [], depth = 0, M = 10, N = 500):
+    """ Could not find a group with 10 Movies and N>=500
+    Therefore Matrix Factorization"""
     print(sol)
     if len(sol) >= M:
         print("10 Movies found:", sol)
@@ -254,95 +265,83 @@ def find_biclique(ratings, sol = [], depth = 0, M = 10, N = 500):
         ratings = ratings[ratings["movieId"] != c]
     return -1
 
-def matrix_factorization(R, P, Q, K, steps=5000, alpha=0.0002, beta=0.02):
-    """Matrix Factorization:
-    Inputs:
-    R: Ratings     (NxM)
-    P: Random Faktor (NXK)
-    Q: Random Faktor (MxK)
-    K:  Numver of latent factors
 
+@ex.capture
+def sample_user_base(distribution, alpha, beta, u_std, BI_LEFT = 0.5):
     """
-    Q = Q.T
-    not_zero = R.nonzero()
-    for step in range(steps):
+    Returns a User of the News Platform
+    A user cosists of is Polarity and his Openness
+    """
+    if(distribution == "beta"):
+        u_polarity = np.random.beta(alpha, beta)
+        u_polarity *= 2
+        u_polarity -= 1
+        openness = u_std
+        #std = np.random.rand()*0.8 + 0.2
+    elif(distribution == "discrete"):
+        #3 Types of user -1,0,1. The neutral ones are more open
+        u_polarity = np.random.choice([-1,0,1])
+        if(u_polarity == 0):
+            openness = 0.85
+        else:
+            openness = 0.1
+    elif(distribution == "bimodal"):
+        if np.random.rand() < BI_LEFT:
+            #user = truncnorm.rvs(-1,1,0.5,0.2,1)
+            u_polarity = np.clip(np.random.normal(0.5,0.2,1),-1,1)
+        else:
+            #user = truncnorm.rvs(-1,1,-0.5,0.2,1)
+            u_polarity = np.clip(np.random.normal(-0.5, 0.2, 1), -1, 1)
+        openness = np.random.rand()/2 + 0.05 #Openness uniform Distributed between 0.5 and 0.55
+    else:
+        print("please specify a distribution for the user")
+        return (0,1)
+    return np.asarray([u_polarity, openness]) #, user**2, np.sign(user)) #
 
+def sample_user_joke():
+    """
+    Yielding a Joke
+    #TODO returning a Joke more Consistent?
+    """
+    df, features = load_data()
+    while True:
+        for i in range(df.shape[0]):
+            yield (df.iloc[i].as_matrix(), features.iloc[i].as_matrix())
+        print("All user preferences already given, restarting with the old user!")
+        new_ordering = np.random.permutation(df.shape[0])
+        df = df.iloc[new_ordering]
+        features = features.iloc[new_ordering]
 
-        eR = R - np.dot(P, Q)
-        """
-        for k in range(K):
-            P[not_zero[0], k] = P[not_zero[0], k] + alpha * (2 * eR[not_zero] * Q[k, not_zero[1]] - beta * P[not_zero[0], k])
-            Q[k, not_zero[1]] = Q[k, not_zero[1]] + alpha * (2 * eR[not_zero] * P[not_zero[0], k] - beta * Q[k, not_zero[1]])
-        """
-
-        for i, j in zip(*not_zero):
-            #P[i,:] = P[i,:] + alpha * (2 * eR[i,j][np.newaxis] * Q[:,j] - beta * P[i,:])
-            #Q[:,j] = Q[:,j] + alpha * (2 * eR[i,j] * P[i,:] - beta * Q[:,j])
-            for k in range(K):
-                P[i][k] = P[i][k] + alpha * (2 * eR[i,j]* Q[k][j] - beta * P[i][k])
-                Q[k][j] = Q[k][j] + alpha * (2 * eR[i,j] * P[i][k] - beta * Q[k][j])
-
-        if np.mean(eR[not_zero]**2) < 0.001:
-            break
-        if not (step % 10):
-            print(step, "error : ", np.mean(eR[not_zero]**2))
-    return P, Q.T
-
-def matrix_factorization_2(R, K):
-    not_zero = R.nonzero()
-    u_means = np.mean(R, axis=1)
-    U, sigma, Vt = svds(R- u_means[:,np.newaxis],k=K)
-    pred = np.dot(np.dot(U, sigma), Vt) + u_means[:,np.newaxis]
-
-class relevance_estimating_network:
-
-    def __init__(self, input_dim = 2, output_dim = 1, hidden_units = 16):
-        self.model = keras.models.Sequential()
-        #self.model.add(Dense(hidden_units,input_shape=(input_dim,), activation = 'relu'))
-        #self.model.add(Dense(output_dim, activation = 'sigmoid'))
-        self.model.add(Dense(output_dim, input_shape=(input_dim,), activation='sigmoid'))
-        self.model.compile(optimizer="adam",loss="mse", metrics=['mse'])
-
-    def train(self,features, relevances, x_test=None,y_test=None, epochs = 5000):
-        self.model.fit(features,relevances, batch_size = min([len(features),400]), verbose=1, epochs = epochs)
-        train_score = self.model.evaluate(features,relevances,batch_size = len(features),verbose=1)
-
-        print("Training performance:" , train_score, "with {} items and {} avg. relevance".format(len(features),sum(relevances)/len(relevances)))
-        #print(np.sort(relevances)[:5])
-        if(x_test is not None):
-            score = self.model.evaluate(x_test,y_test,batch_size = len(x_test))
-            print("Evaluating performance:", score)
-    def evaluate(self, x_test, y_test):
-        return self.model.evaluate(x_test,y_test,batch_size = len(x_test))
-
-    def predict(self,features):
-        result = self.model.predict(features).flatten()
-        #print("predicted :", np.round(result,3), "containing {} elements ".format(len(result)))
-        return result
-
-
-def test_neural_networks_jokes():
-    jokes, features = load_data()
-    no_features = [i for i in range(jokes.shape[1]) if i+1 not in features]
-    joke = jokes.iloc[:, no_features]
-    feature = jokes.iloc[:, features]
-
-    print(joke.shape, feature.shape, jokes.shape)
-    x = jokes.groupby(features).mean()
-    x = x.where(x < 0.5, lambda y: 1 - y)
-
-    train_x = feature.iloc[:10000]
-    train_x = np.ones(10000)
-    train_y = joke.iloc[:10000]
-    test_x = feature.iloc[10000:]
-
-    test_y = joke.iloc[10000:]
-    test_x = np.ones(test_y.shape[0])
-    nn = relevance_estimating_network(1,100,10)
-    nn.train(train_x,train_y, test_x, test_y, epochs = 500)
+@ex.capture
+def sample_user_movie(MOVIE_RATING_FILE):
+    """
+    Yielding a Movie
+    """
+    ranking, features, _ = load_movie_data_saved(MOVIE_RATING_FILE)
+    print(np.shape(ranking))
+    while True:
+        random_order = np.random.permutation(np.shape(ranking)[0])
+        for i in random_order:
+            yield (ranking[i,:], features[i,:])
+        print("All user preferences already given, restarting with the old user!")
 
 
 
 
 
-#test_neural_networks_jokes()
+
+
+@ex.capture
+def get_user_generator(DATA_SET):
+    if DATA_SET == 1:
+        sample_user_generator = sample_user_joke()
+        sample_user = lambda: next(sample_user_generator)
+
+    elif DATA_SET == 0:
+        sample_user = lambda: sample_user_base(distribution="bimodal")
+
+    elif DATA_SET == 2:
+        sample_user_generator = sample_user_movie()
+        sample_user = lambda: next(sample_user_generator)
+
+    return sample_user

@@ -1,14 +1,14 @@
 
 """##Relevance Estimating Neural Network"""
+
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import numpy as np
 import tensorflow as tf
-import torch
-import torch.nn as tnn
-import torch.nn.functional as F
-from torch import optim
 import keras
 from keras.layers import Dense
 from keras import regularizers
+
 
 class relevance_estimating_network:
 
@@ -82,62 +82,4 @@ class relevance_estimating_network:
             result = self.model.predict(features).flatten()
         #print("predicted :", np.round(result,3), "containing {} elements ".format(len(result)))
         return result
-    
-class linear_one_hot_network(tnn.Module):
-    def __init__(self, input_features = 2, input_items = 27, output_dim = 1):
-        super(linear_one_hot_network, self).__init__()
-       
-        self.n = input_items        
-        self.out_dim = output_dim
-        self.n_features = input_features
-        #self.weight = tnn.Parameter(torch.randn(output_dim, self.n+self.n_features))
-        self.weight = tnn.Parameter(0.001 * torch.ones(output_dim, self.n+self.n_features))
-        
-    
-    def forward(self, x):
-        x = F.linear(x, self.weight)
-        return x    
 
-    def predict(self,x, original_items = True ):
-        X = self.features_to_input(x, original_items )
-        return self.forward(X).data.numpy().flatten()
-    
-    def add_item(self,n=1):
-        #Add a new variable initialized close to zero for each new item
-        self.n += n
-        with torch.no_grad():
-            self.weight = tnn.Parameter(torch.cat((self.weight, 0.001 * torch.ones(self.out_dim, n)), 1))
-    
-    def train(self, features, relevances, epochs = 5000, lr=0.01, reg_w=0.001, consider=None):            
-        #Train on features and one-hot-encoding
-        X = self.features_to_input(features, original_items = True)
-        Y = torch.FloatTensor(relevances)
-        if consider is not None:
-            X = X[consider]
-            Y = Y[consider]
-        
-        optimizer = optim.Adam(self.parameters(), lr=lr) 
-                
-        for epoch in range(epochs):
-            optimizer.zero_grad() 
-            loss = torch.norm(Y-torch.t(self.forward(X)))**2  + reg_w * torch.norm(self.weight[:,:self.n_features])**2 + 10*reg_w * torch.norm(self.weight[:,self.n_features:])**2 
-            #if(epoch % 50 == 0):
-                #print("Loss in epoch{} : ".format(epoch), loss)
-                #print("Predicted relevances:", self.forward(X).data.numpy().flatten())
-            loss.backward()
-            optimizer.step() 
-         
-    def features_to_input(self, items, original_items = True):
-        assert(np.shape(items)[-1] == self.n_features)
-                       
-        x = np.zeros((len(items),self.n+self.n_features))
-        x[:,:self.n_features] = items
-
-        if(original_items):
-            #One-hot_encoding
-            assert(len(items) == self.n)
-            x[np.arange(self.n),self.n_features + np.arange(self.n)] = 1
-        return torch.FloatTensor(x)
-        
-        
-        
