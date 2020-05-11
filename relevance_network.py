@@ -12,16 +12,22 @@ from keras import regularizers
 
 class relevance_estimating_network:
 
-    def __init__(self, input_dim = 2, output_dim = 1, hidden_units = 16, joke = False, supervised = False, news = False ):
+    def __init__(self, input_dim = 2, output_dim = 1, hidden_units = 16, joke = False, supervised = False, news = False, logdir="data/"):
+
+        self.tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
+        self.history =  []
         self.joke = joke
         self.news = news
         self.supervised = supervised
         self.model = keras.models.Sequential()
         if hidden_units == 0:# or joke:
-            self.model.add(Dense(output_dim, input_shape=(input_dim,), activation='sigmoid'))
+            #self.model.add(Dense(output_dim, input_shape=(input_dim,), activation= lambda x: keras.activations.relu(x, max_value=1)))
+            self.model.add(Dense(output_dim, input_shape=(input_dim,), activation='relu', kernel_regularizer=regularizers.l2(0.00001)))
+            #self.model.add(Dense(output_dim, input_shape=(input_dim,), activation='sigmoid'))
         else:
-            self.model.add(Dense(hidden_units,input_shape=(input_dim,), activation = 'relu'))
-            #self.model.add(Dense(hidden_units, input_shape=(hidden_units,), activation='relu'))
+            self.model.add(Dense(hidden_units,input_shape=(input_dim,), activation = 'relu', kernel_regularizer=regularizers.l2(0.001)))
+            #self.model.add(Dense(hidden_units, input_shape=(hidden_units,), activation='relu', kernel_regularizer=regularizers.l2(0.01)))
+
             self.model.add(Dense(output_dim, activation = 'sigmoid'))
             #self.model.add(Dense(output_dim, activation='relu'))
 
@@ -30,14 +36,33 @@ class relevance_estimating_network:
         else:
             self.model.compile(optimizer="adam",loss="mse", metrics=['mse'])
 
+
+        self.file_writer = tf.summary.FileWriter(logdir, tf.get_default_graph())
+
     def unbiased_loss(self, y_true, y_pred):
         #click/propensity as objective
         return keras.backend.mean((0 - y_pred) **2 +  y_true * ((1-y_pred)**2 - (0-y_pred)**2))
 
 
-    def train(self,features, relevances, x_test=None,y_test=None, epochs = 5000):
-        self.model.fit(features, relevances, batch_size = len(features), verbose=0, epochs = epochs)
-        train_score = self.model.evaluate(features,relevances,batch_size = len(features),verbose=0)
+    def train(self,features, relevances, x_test=None,y_test=None, epochs = 50, trial=0):
+        if trial <= -4000:
+            history = self.model.fit(features, relevances, batch_size=len(features), verbose=1,
+                                     epochs=epochs, callbacks=[self.tensorboard_callback])
+        else:
+            history = self.model.fit(features, relevances, batch_size = 100, verbose=0, epochs=epochs)# , callbacks=[self.tensorboard_callback])
+
+        #loss = history.history['loss'][0]
+        #unbiased_loss = history.history["unbiased_loss"][0]
+        #print("trial {}, loss:".format(trial), loss)
+        #print("unbiased_loss:", unbiased_loss)
+        # Add values to Tensorboard
+        #training_summary = tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=loss),
+        #                                     tf.Summary.Value(tag="unbiased_loss", simple_value=unbiased_loss)])
+        #self.file_writer.add_summary(training_summary, global_step=trial)
+
+        if(trial%1000 ==99):
+            train_score = self.model.evaluate(features,relevances, batch_size = len(features), verbose=0)
+            print("trial{}, loss:".format(trial), train_score)
 
         #print("Training performance:" , train_score, "with {} items and {} avg. relevance".format(len(features),sum(relevances)/len(relevances)))
         #print(np.sort(relevances)[:5])
