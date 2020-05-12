@@ -3,7 +3,8 @@ import scipy.integrate
 import scipy.stats
 from matplotlib import pyplot as plt
 import matplotlib as mpl
-
+import data_utils
+from Documents import Item, Movie
 from config import ex
 params = {'legend.fontsize': 'xx-large',
          'axes.labelsize': 'xx-large',
@@ -476,6 +477,85 @@ def plot_numerical_relevance(items, alpha = U_ALPHA, beta = U_BETA, u_std = U_ST
     return np.asarray(relevances)
 
 
+def load_and_plot_movie_experiment(trials = 10, n_user = 6000):
+    global DATA_SET
+    DATA_SET = 2
+
+    _, _, groups = data_utils.load_movie_data_saved("data/movie_data_binary_latent_5Comp_trial0.npy")
+    items = []
+    for i,g in enumerate(groups):
+        items.append(Movie(i,g))
+    G = assign_groups(items)
+    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
+    #movie_data = np.load("Movie_data/plots/MovieExperimentFull/Fairness_Data.npy")
+    #movie_data = np.load("Movie_data/plots/MovieExperimentFull_Var/Fairness_Data.npy", allow_pickle=True)
+    #movie_data = np.load("Movie_data/plots/MovieExperimentFull_HighestVar/Fairness_Data.npy", allow_pickle=True)
+    #movie_data = np.load("Movie_data/plots/MovieExperimentFull_binary/Fairness_Data.npy")
+    movie_data = np.load("Movie_data/plots/MovieExperimentFull_5Comanies/Fairness_Data.npy", allow_pickle=True)
+    #labels = np.asarray(["Naive", "IPS", "Pers", "Skyline-Pers", "Fair-I-IPS", "Fair-E-IPS", "Fair-I-Pers", "Fair-E-Pers"])
+    labels = np.asarray(
+        ["Naive", "D-ULTR(Glob)", "D-ULTR", "Skyline", "FairCo(Imp)", "FairCo(Exp)", "FairCo(Imp)", "FairCo(Exp)"])
+    overall_fairness = get_unfairness_from_rundata(movie_data, pair_group_combinations, trials, n_user)
+    ndcg_full = np.asarray([x["NDCG"][:, :n_user] for x in movie_data])
+    #colors = ["blue", "orange", "green", "black", "red", "purple", "red", "purple"]
+    colors = ["C0", "C1", "C4", "black", "C2", "C3", "C2", "C3"]
+    # NDCG plot with Naive, IPS, Pers, Skyline
+
+    ndcg = [ np.mean(ndcg_full[i],axis=0) for i in [0,1,2,3]]
+    ndcg_std = [ndcg_full[i] for i in [0,1,2,3]]
+    ndcg_labels = labels[[0,1,2,3]]
+    ndcg_colors = colors[:4]
+    # plt.figure("NDCG", figsize=(15,5))
+    for i in range(4):
+        plot_ndcg(ndcg[i], ndcg_labels[i], plot=False, window_size=60000, std=ndcg_std[i], color=ndcg_colors[i])
+    plt.legend(ncol=2)
+    plt.savefig("Movie_data/Paper_Plots/SkylineNDCG.pdf", bbox_inches="tight", dpi=800)
+    plt.show()
+    plt.close("all")
+
+
+    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2, 6],
+                                     "Movie_data/Paper_Plots/NDCG_UnfairImpactfinal.pdf", 1, colors = colors)
+
+    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2, 7],
+                                     "Movie_data/Paper_Plots/NDCG_UnfairExposurefinal.pdf", 0, colors = colors)
+
+
+    # Unfairness In Impact & Exposure for IPS, Fair-E-Pers, Fair-I-Pers
+
+    selection = [2, 6,7]
+    last_colors = [colors[i] for i in selection]
+    plot_Exposure_and_Impact_Unfairness(overall_fairness[selection], labels[selection], "Movie_data/Paper_Plots/ImpactVSExposurefinal.pdf", colors=last_colors)
+
+def load_and_plot_news():
+    global DATA_SET
+    DATA_SET = 0
+    trials = 100
+    n_user = 3000
+    G = [0,1]
+    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
+    #news_data = np.load("News_data/plots/Random_data_final/Fairness_Data.npy")
+    #labels = np.asarray(["Naive", "IPS", "Pers", "Fair-I-IPS", "Fair-I-Pers", "Fair-E-IPS", "Fair-E-Pers"])
+    news_data = np.load("News_data/plots/Random_data_final_unconditionalNDCG/Fairness_Data.npy", allow_pickle=True)
+    #labels = np.asarray(["Naive", "IPS", "Fair-I-IPS", "Fair-E-IPS"])
+
+    labels = np.asarray(
+        ["Naive", "D-ULTR(Glob)", "FairCo(Imp)", "FairCo(Exp)"])
+    colors = ["C0", "C1", "C2", "C3"]
+
+
+    overall_fairness = get_unfairness_from_rundata(news_data, pair_group_combinations, trials, n_user)
+    ndcg_full = np.asarray([x["NDCG"][:, :n_user] for x in news_data])
+
+    selection = [0,1,2] #[0, 1, 2, 3, 4]
+    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection,
+                                     "News_data/NDCG_UnfairImpact.pdf", 1, colors=colors)
+    selection = [0, 1, 3] # [0, 1, 2, 5, 6]
+    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection,
+                                     "News_data/NDCG_UnfairExposure.pdf", 0,colors=colors)
+
+
+
 def load_and_plot_all():
     global DATA_SET
     DATA_SET = True
@@ -742,3 +822,23 @@ def plot_lambda_comparison(x,data, methods, trials, pair_group_combinations,name
     plot_with_errorbar(x, all_stats, methods,
                        "plots/Paper_Plots/" + name+ "Exposure.pdf",
                        r'$\lambda $', log_x=True, impact=False)
+
+
+
+
+def get_unfairness_from_rundata(run_data, pair_group_combinations, trials=10, iterations=7000):
+    overall_fairness = np.zeros((len(run_data), trials, iterations, 2))
+    for i, data in enumerate(run_data):
+        print("Shapes: Prop", np.shape(data["prop"]), "rel", np.shape(data["true_rel"]), "clicks", np.shape(data["clicks"]))
+        for a, b in pair_group_combinations:
+            overall_fairness[i, :, :, 0] += np.abs(
+                data["prop"][:, :iterations, a] / data["true_rel"][:, :iterations, a] - data["prop"][:, :iterations, b] / data[
+                                                                                                            "true_rel"][
+                                                                                                        :, :iterations, b])
+            overall_fairness[i, :, :, 1] += np.abs(
+                data["clicks"][:, :iterations, a] / data["true_rel"][:, :iterations, a] - data["clicks"][:, :iterations, b] / data[
+                                                                                                                "true_rel"][
+                                                                                                            :, :iterations,
+                                                                                                            b])
+    overall_fairness /= len(pair_group_combinations)
+    return overall_fairness

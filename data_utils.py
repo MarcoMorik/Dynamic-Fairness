@@ -8,7 +8,7 @@ from config import ex
 
 import surprise
 sigmoid = lambda x: 1. / (1. + np.exp(-(x - 3) / 0.1))
-
+from Documents import Item
 
 def load_data():
     df = pd.read_excel("data/jester-data-1.xls",header=None)
@@ -55,6 +55,29 @@ def load_news_data(seed=18):
     df["Group"] = df.Source.astype("category").cat.codes
 
     return df, df_small, df_tiny
+
+
+def load_news_items(n = 30, completly_random = False, n_left=None):
+    data_full, data_medium, data_tiny = load_news_data()
+    items = []
+
+    if completly_random:
+        for index, row in data_full.sample(n).iterrows():
+            items.append(Item(row["Bias"], quality=1, id=index, news_group=row["Group"]))
+    elif n_left is not None:
+        c_left = 0
+        for index, row in data_full.sample(frac=1).iterrows():
+            if((row["Bias"]<0 and c_left < n_left ) or (row["Bias"]>0 and len(items) < n - (n_left -c_left))):
+                items.append(Item(row["Bias"], quality=1, id=index, news_group=row["Group"]))
+            if( len(items)>= n):
+                return items
+
+    else:
+        for index, row in data_tiny.iterrows():
+            items.append(Item(row["Bias"],quality=1, id=index, news_group=row["Group"]))
+
+    return items
+
 
 def define_genre(meta_data):
 
@@ -298,20 +321,6 @@ def sample_user_base(distribution, alpha, beta, u_std, BI_LEFT = 0.5):
         return (0,1)
     return np.asarray([u_polarity, openness]) #, user**2, np.sign(user)) #
 
-def sample_user_joke():
-    """
-    Yielding a Joke
-    #TODO returning a Joke more Consistent?
-    """
-    df, features = load_data()
-    while True:
-        for i in range(df.shape[0]):
-            yield (df.iloc[i].as_matrix(), features.iloc[i].as_matrix())
-        print("All user preferences already given, restarting with the old user!")
-        new_ordering = np.random.permutation(df.shape[0])
-        df = df.iloc[new_ordering]
-        features = features.iloc[new_ordering]
-
 @ex.capture
 def sample_user_movie(MOVIE_RATING_FILE):
     """
@@ -333,14 +342,10 @@ def sample_user_movie(MOVIE_RATING_FILE):
 
 @ex.capture
 def get_user_generator(DATA_SET):
-    if DATA_SET == 1:
-        sample_user_generator = sample_user_joke()
-        sample_user = lambda: next(sample_user_generator)
-
-    elif DATA_SET == 0:
+    if DATA_SET == 0:
         sample_user = lambda: sample_user_base(distribution="bimodal")
 
-    elif DATA_SET == 2:
+    elif DATA_SET == 1:
         sample_user_generator = sample_user_movie()
         sample_user = lambda: next(sample_user_generator)
 

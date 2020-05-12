@@ -11,7 +11,7 @@ def my_config():
     U_ALPHA = 0.5
     U_BETA = 0.5
     U_STD = 0.3
-    W_FAIR = 10
+    w_fair = 10
     BI_LEFT = 0.5
     alpha = U_ALPHA
     beta = U_BETA
