@@ -5,7 +5,7 @@ from Simulation import assign_groups, simulate, collect_relevance_convergence
 import matplotlib.pyplot as plt
 from plotting import *
 from Documents import Item, Movie
-def experiment_different_starts(load=False, prefix = "", news_items = False):
+def experiment_different_starts(load=False, trials = 50, iterations= 3000, prefix = "", news_items = True):
     if not os.path.exists(prefix):
         os.makedirs(prefix)
 
@@ -13,8 +13,6 @@ def experiment_different_starts(load=False, prefix = "", news_items = False):
     click_model = "PBM_log"
     #starts = [0, 1, 2, 3, 4, 5, 7, 10, 15,25,35]
     starts = [0, 5, 10, 20, 35, 50, 75, 100, 150, 200, 300, 400]
-    iterations = 3000
-    trials = 50
     if news_items:
         multi_items = [load_news_items(completly_random=True) for i in range(trials)]
         multi_G = [assign_groups(x) for x in multi_items]
@@ -141,7 +139,7 @@ def experiment_different_starts(load=False, prefix = "", news_items = False):
 
 
 
-def test_different_population(trials = 10, iterations = 2000, load = False, prefix = "", news_items=False):
+def test_different_population(trials = 10, iterations = 2000, load = False, prefix = "", news_items=True):
     if not os.path.exists(prefix):
         os.makedirs(prefix)
 
@@ -244,6 +242,22 @@ def run_and_save_final_stats(methods, items, trials=10, iterations=2000, get_use
         return final_stats, user_distribution
     return final_stats
 
+@ex.capture
+def compare_controller_LP(PLOT_PREFIX, trials = 20, iterations = 3000):
+
+    if not os.path.exists(PLOT_PREFIX):
+        os.makedirs(PLOT_PREFIX)
+    multiple_items = [load_news_items(n=30, completly_random=True) for i in range(trials)]
+    items = multiple_items[0]
+    popularity = np.ones(len(items))
+    G = assign_groups(items)
+    click_models = ["lambda0","lambda0.0001", "lambda0.001", "lambda0.01","lambda0.1","lambda1", "lambda10","lambda100"]#,"lambda1000"]
+    if not os.path.exists(PLOT_PREFIX):
+        os.makedirs(PLOT_PREFIX)
+    collect_relevance_convergence(items, popularity, trials, click_models=click_models,
+                                  methods=["Fair-I-IPS-LP", "Fair-I-IPS"], iterations=iterations,
+                                  plot_individual_fairness=False, multiple_items=multiple_items)
+
 
 def news_experiment():
     items = load_news_items()
@@ -317,12 +331,10 @@ def news_experiment():
                                   plot_individual_fairness=True, multiple_items=multiple_items)
 
 
-def movie_experiment(plot_prefix, methods, rating_file, trials=4, iterations=5000, binary_rel=False):
+@ex.capture
+def movie_experiment(PLOT_PREFIX, methods, MOVIE_RATING_FILE, trials=4, iterations=5000, binary_rel=False):
 
-    MOVIE_RATING_FILE = rating_file
-    PLOT_PREFIX = plot_prefix
 
-    sample_user_generator = sample_user_movie()
     _, _, groups = load_movie_data_saved(MOVIE_RATING_FILE)
     items = []
     for i, g in enumerate(groups):

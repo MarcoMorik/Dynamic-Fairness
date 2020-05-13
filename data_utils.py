@@ -155,7 +155,7 @@ def get_ranking_matrix_incomplete(ratings, meta_data, n_user):
     movie_id_to_idx = {}
     movie_idx_to_id = []
     print(np.shape(ranking_matrix))
-    for i, movie in enumerate(y["id"]):
+    for i, movie in enumerate(meta_data["id"]):
         movie_id_to_idx[movie] = i
         movie_idx_to_id.append(movie)
         single_movie_ratings = ratings[ratings["movieId"].isin([movie])]

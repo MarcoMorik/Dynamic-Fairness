@@ -50,79 +50,21 @@ def init_plotting():
 
 
 #TODO, should get called not all functions...
-from dynamic_fairness_in_rankings import Item, get_numerical_relevances, PLOT_PREFIX, U_ALPHA, U_BETA, U_STD, \
-    affinity_score_adv, Joke, assign_groups, get_unfairness_from_rundata
 
 
-def plot_contour(nn , linear = False, items=None, plot_with_comparison= True):
-    p = np.linspace(-1,1,20)
-    q = np.linspace(0,1,10)
-    xx, yy = np.meshgrid(p,q)
-    stacked_features = np.stack((xx.flatten(),yy.flatten()),axis=1)
-    if(len(Item(1,1).get_features())==6):
-        stacked_features = np.stack((stacked_features[:,0],stacked_features[:,1],stacked_features[:,0]**2,stacked_features[:,0]<-0.33,stacked_features[:,0]>0.33,[-0.33 < x < 0.33 for x in stacked_features[:,0]]), axis=1)
-    elif(len(Item(1,1).get_features())==5):
-        stacked_features = np.stack((stacked_features[:,0],stacked_features[:,1],stacked_features[:,0]<-0.33,stacked_features[:,0]>0.33,[-0.33 < x < 0.33 for x in stacked_features[:,0]]), axis=1)
-
-    if(linear):
-        result = nn.predict(stacked_features, False)
-    else:
-        result = nn.predict(stacked_features)
-
-    if(plot_with_comparison):
-        fig, axes = plt.subplots(figsize=(7,3.5),nrows=1, ncols=2, sharey='row')
-        axes.flat[0].set_ylabel('Quality')
-        tmp_items = [Item(x,1) for x in p]
-        relevances_p = get_numerical_relevances(tmp_items)
-        relevances = relevances_p[np.newaxis,:] * q[:,np.newaxis]
-        z = [relevances,np.reshape(result,np.shape(xx))]
-        title = ["True Relevance", "Estimated Relevance"]
-        for i, ax in enumerate(axes.flat):
-            im = ax.contourf(xx, yy, z[i], vmin=0, vmax=0.4)
-            ax.set_xlabel('Polarity')
-            ax.set_title(title[i])
-            ax.set_xlim(-1,1)
-            ax.set_ylim(0,1)
-
-        if(items is not None):
-            polarities = [x.p  for x in items]
-            qualities = [x.q for x in items]
-            axes.flat[1].scatter(polarities,qualities,marker='x',color="black")
-
-        fig.subplots_adjust(bottom=0.22)
-        cbar_ax = fig.add_axes([0.1, 0, 0.8, 0.05])
-        fig.colorbar(im, cax=cbar_ax,orientation='horizontal',boundaries=np.linspace(0, 0.4, 9))
-
-    else:
-        plt.contourf(xx, yy, np.reshape(result,np.shape(xx)),vmin=0, vmax=0.4)
-        plt.xlabel('Polarity')
-        plt.ylabel('Quality')
-        if(items is not None):
-            polarities = [x.p  for x in items]
-            qualities = [x.q for x in items]
-            plt.scatter(polarities,qualities,marker='x',color="black")
-        plt.colorbar(boundaries=np.linspace(0, 0.4, 9),location="bottom")
-        #plt.title("Estimated Relevances")
-    plt.show()
+from Documents import Movie, Item
 
 
-def plot_optimal_contour():
-    p = np.linspace(-1,1,20)
-    q = np.linspace(0,1,10)
-    xx, yy = np.meshgrid(p,q)
-    items = [Item(x,1) for x in p]
-    relevances_p = get_numerical_relevances(items)
-    relevances = relevances_p[np.newaxis,:] * q[:,np.newaxis]
-
-    m = plt.contourf(xx, yy, relevances, vmin=0, vmax=0.4)
-    plt.xlabel('Polarity')
-    plt.ylabel('Quality')
-    plt.colorbar( boundaries=np.linspace(0, 0.4, 9),orientation='horizontal')
-    plt.title("True Relevances")
-    plt.show()
+def assign_groups(items):
+    n_groups = max([i.g for i in items])+1
+    G = [ [] for i in range(n_groups)]
+    for i, item in enumerate(items):
+        G[item.g].append(i)
+    return G
 
 
-def plot_neural_error(errors, labels):
+@ex.capture
+def plot_neural_error(errors, labels, PLOT_PREFIX):
     plt.close("all")
     # Plot Neural error
     for i, error in enumerate(errors):
@@ -132,8 +74,8 @@ def plot_neural_error(errors, labels):
     plt.xlabel("Users")
     plt.savefig(PLOT_PREFIX + "Neural_Error.pdf", bbox_inches="tight")
 
-
-def plot_click_bar_plot(frac_c,labels, save=False):
+@ex.capture
+def plot_click_bar_plot(frac_c,labels, save=False, PLOT_PREFIX=""):
     group_colors = {-1:"blue",1:"red",0:"black"}
     n = len(labels)
     plt.bar(np.arange(n), frac_c[0], color=group_colors[-1], edgecolor='white', width=1, label="Negative")
@@ -223,8 +165,8 @@ def plot_average_rank(ranking_hist, G):
     plt.show()
     plt.close("all")
 
-
-def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two = True):
+@ex.capture
+def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two = True, PLOT_PREFIX=""):
     n = np.shape(overall_fairness)[2]
     #plt.figure("Unfairness",figsize=(16,4))
     if(only_two):
@@ -303,45 +245,18 @@ def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two 
 
     plt.show("Unfairness")
 
-
-def plot_fairness_over_time(fairness, G, model):
+@ex.capture
+def plot_fairness_over_time(fairness, G, model, PLOT_PREFIX, DATA_SET):
     n = np.shape(fairness["rel"])[0]
-    group_dict = {0: "Negative", 1: "Positive", 2: "Neutral"}
+    if DATA_SET == 0:
+        group_dict = {0: "Negative", 1: "Positive", 2: "Neutral"}
+        color_dict = {0: "blue", 1: "red", 2: "black"}
+    else:
+        group_dict = {0: "C0", 1: "C1", 2: "C2", 3: "C3", 4: "C4"}
+        color_dict = {0: "blue", 1: "red", 2: "black", 3: "green", 4: "yellow"}
     normalize_iter = np.arange(n)
     normalize_iter[0] = 1#Zerost iteration should be divided by 1
 
-    """
-    plt.figure(figsize=(12,4))
-    for g in range(len(G)):
-        plt.subplot(131+g)
-        if "DCM" in model:
-            plt.axis([0,n,0,0.7])
-        else:
-            plt.axis([0,n,0,2])
-        if "Naive" in model:
-            fairness["rel"] = fairness["clicks"]
-        
-        #plt.plot(np.arange(n), fairness["rel"][:,g] / normalize_iter /len(G[g]) , label="Estimated Relevance")
-        #plt.plot(np.arange(n), fairness["true_rel"][:,g] / normalize_iter /len(G[g]) , label="True Relevance")
-       
-        
-        #plt.plot(np.arange(n), fairness["clicks"][:,g] / normalize_iter , label="Clicks")
-        #plt.plot(np.arange(n), fairness["prop"][:,g] / normalize_iter /len(G[g]) , label="Propensities")
-
-        plt.plot(np.arange(n), fairness["prop"][:,g] / fairness["rel"][:,g], label="Exposure per est. Relevance")
-        plt.plot(np.arange(n), fairness["prop"][:,g] / fairness["true_rel"][:,g], label="Exposure per True Relevance")
-        
-        plt.plot(np.arange(n), fairness["clicks"][:,g] / fairness["rel"][:,g], label="Clicks per est. Relevance")
-        plt.plot(np.arange(n), fairness["clicks"][:,g] / fairness["true_rel"][:,g], label="Clicks per True Relevance")
-        
-        plt.xlabel("Users")
-        plt.title("Model "+ model + "\n Group " + group_dict[g])
-        
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.show()
-    """
-
-    color_dict = {0: "blue", 1: "red", 2: "black"}
     plt.figure("Fairness",figsize=(17,4))
     for g in range(len(G)):
         plt.subplot(141)
@@ -404,6 +319,24 @@ def plot_ndcg(ndcg, label="", plot=True, figure_name="NDCG", window_size=0, std 
     if(plot):
         plt.title("Average NDCG in model " + label)
         plt.show()
+def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection, name, type=0, synthetic=False, colors=None):
+    # fig, ax = plt.subplots()
+    # ax2 = None
+    ax = plt.subplot(121)
+    ax2 = plt.subplot(122)
+    unfairness_label = "Impact Unfairness" if type == 1 else "Exposure Unfairness"
+    for i in selection:
+        # ax2 = plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
+        plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
+                             unfairness_label=unfairness_label, synthetic=synthetic, color=colors[i])
+
+    handles, labels = ax.get_legend_handles_labels()
+    handles2, labels2 = ax2.get_legend_handles_labels()
+    order = [0,2,1,3]
+    ax2.legend()
+    plt.savefig(name, bbox_inches="tight", dpi=800)
+    plt.close("all")
+
 
 
 def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_label = "Unfairness", synthetic=False):
@@ -421,16 +354,20 @@ def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_labe
 
     color = p[-1].get_color()
     ax.set_xlim([0,n])
+    """
     if(synthetic):
         ax.set_ylim([0.95, 1])
     else:
         ax.set_ylim([0.75,0.9])
+        """
     if ax2 is not None:
         ax2.set_xlim([0,n])
+        """
         if(synthetic):
             ax2.set_ylim([0, 0.2])
         else:
             ax2.set_ylim([0, 0.2])
+        """
         ax2.set_xlabel("Users")
         ax2.set_ylabel(unfairness_label)
 
@@ -453,191 +390,6 @@ def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_labe
     return ax2
 
 
-def plot_numerical_relevance(items, alpha = U_ALPHA, beta = U_BETA, u_std = U_STD):
-    relevances = []
-    beta_dist = lambda x: scipy.stats.beta.pdf(x, alpha, beta)
-    for item in items:
-        aff = lambda x: affinity_score_adv((x,u_std), item )
-        #aff = lambda x: np.exp(-(item - x)**2 / (2*u_std**2))
-        rel = lambda x: aff(x) * 0.5* beta_dist((x+1)/2)
-        integrated = scipy.integrate.quad(rel,-1,1)
-        #print("Integration result", integrated)
-        relevances.append(integrated)
-    acc = 25
-    plot_relevances = np.zeros(acc)
-    for i,j in enumerate(np.linspace(-1,1,acc)):
-        aff = lambda x: affinity_score_adv((x,u_std), j )
-        rel = lambda x: aff(x) * 0.5* beta_dist((x+1)/2)
-        plot_relevances[i] =  scipy.integrate.quad(rel,-1,1)[0]
-    plt.plot(np.linspace(-1,1,acc),plot_relevances)
-    plt.axis([-1,1,0,0.5])
-    plt.ylabel("Relevance")
-    plt.xlabel("Documents Affinity")
-    plt.show()
-    return np.asarray(relevances)
-
-
-def load_and_plot_movie_experiment(trials = 10, n_user = 6000):
-    global DATA_SET
-    DATA_SET = 2
-
-    _, _, groups = data_utils.load_movie_data_saved("data/movie_data_binary_latent_5Comp_trial0.npy")
-    items = []
-    for i,g in enumerate(groups):
-        items.append(Movie(i,g))
-    G = assign_groups(items)
-    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-    #movie_data = np.load("Movie_data/plots/MovieExperimentFull/Fairness_Data.npy")
-    #movie_data = np.load("Movie_data/plots/MovieExperimentFull_Var/Fairness_Data.npy", allow_pickle=True)
-    #movie_data = np.load("Movie_data/plots/MovieExperimentFull_HighestVar/Fairness_Data.npy", allow_pickle=True)
-    #movie_data = np.load("Movie_data/plots/MovieExperimentFull_binary/Fairness_Data.npy")
-    movie_data = np.load("Movie_data/plots/MovieExperimentFull_5Comanies/Fairness_Data.npy", allow_pickle=True)
-    #labels = np.asarray(["Naive", "IPS", "Pers", "Skyline-Pers", "Fair-I-IPS", "Fair-E-IPS", "Fair-I-Pers", "Fair-E-Pers"])
-    labels = np.asarray(
-        ["Naive", "D-ULTR(Glob)", "D-ULTR", "Skyline", "FairCo(Imp)", "FairCo(Exp)", "FairCo(Imp)", "FairCo(Exp)"])
-    overall_fairness = get_unfairness_from_rundata(movie_data, pair_group_combinations, trials, n_user)
-    ndcg_full = np.asarray([x["NDCG"][:, :n_user] for x in movie_data])
-    #colors = ["blue", "orange", "green", "black", "red", "purple", "red", "purple"]
-    colors = ["C0", "C1", "C4", "black", "C2", "C3", "C2", "C3"]
-    # NDCG plot with Naive, IPS, Pers, Skyline
-
-    ndcg = [ np.mean(ndcg_full[i],axis=0) for i in [0,1,2,3]]
-    ndcg_std = [ndcg_full[i] for i in [0,1,2,3]]
-    ndcg_labels = labels[[0,1,2,3]]
-    ndcg_colors = colors[:4]
-    # plt.figure("NDCG", figsize=(15,5))
-    for i in range(4):
-        plot_ndcg(ndcg[i], ndcg_labels[i], plot=False, window_size=60000, std=ndcg_std[i], color=ndcg_colors[i])
-    plt.legend(ncol=2)
-    plt.savefig("Movie_data/Paper_Plots/SkylineNDCG.pdf", bbox_inches="tight", dpi=800)
-    plt.show()
-    plt.close("all")
-
-
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2, 6],
-                                     "Movie_data/Paper_Plots/NDCG_UnfairImpactfinal.pdf", 1, colors = colors)
-
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2, 7],
-                                     "Movie_data/Paper_Plots/NDCG_UnfairExposurefinal.pdf", 0, colors = colors)
-
-
-    # Unfairness In Impact & Exposure for IPS, Fair-E-Pers, Fair-I-Pers
-
-    selection = [2, 6,7]
-    last_colors = [colors[i] for i in selection]
-    plot_Exposure_and_Impact_Unfairness(overall_fairness[selection], labels[selection], "Movie_data/Paper_Plots/ImpactVSExposurefinal.pdf", colors=last_colors)
-
-def load_and_plot_news():
-    global DATA_SET
-    DATA_SET = 0
-    trials = 100
-    n_user = 3000
-    G = [0,1]
-    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-    #news_data = np.load("News_data/plots/Random_data_final/Fairness_Data.npy")
-    #labels = np.asarray(["Naive", "IPS", "Pers", "Fair-I-IPS", "Fair-I-Pers", "Fair-E-IPS", "Fair-E-Pers"])
-    news_data = np.load("News_data/plots/Random_data_final_unconditionalNDCG/Fairness_Data.npy", allow_pickle=True)
-    #labels = np.asarray(["Naive", "IPS", "Fair-I-IPS", "Fair-E-IPS"])
-
-    labels = np.asarray(
-        ["Naive", "D-ULTR(Glob)", "FairCo(Imp)", "FairCo(Exp)"])
-    colors = ["C0", "C1", "C2", "C3"]
-
-
-    overall_fairness = get_unfairness_from_rundata(news_data, pair_group_combinations, trials, n_user)
-    ndcg_full = np.asarray([x["NDCG"][:, :n_user] for x in news_data])
-
-    selection = [0,1,2] #[0, 1, 2, 3, 4]
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection,
-                                     "News_data/NDCG_UnfairImpact.pdf", 1, colors=colors)
-    selection = [0, 1, 3] # [0, 1, 2, 5, 6]
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection,
-                                     "News_data/NDCG_UnfairExposure.pdf", 0,colors=colors)
-
-
-
-def load_and_plot_all():
-    global DATA_SET
-    DATA_SET = True
-    skyline_data = np.load("plots/Jokes/Skyline/Fairness_Data.npy") #Skyline
-    exposure_data = np.load("plots/Jokes/Exposure/Fairness_Data.npy") #Naive Pop, IPS, Fair-E-IPS
-    exposure_pers_data = np.load("plots/Jokes/ExposurePers/Fairness_Data.npy") # Naive Pop, Pers, Fair-E-Pers
-    impact_data = np.load("plots/Jokes/ImpactPers/Fairness_Data.npy") # Fair-I-IPS, Fair-I-Pers
-
-    synthetic_data = np.load("plots/SynteticOverview/Fairness_Data.npy")
-
-    items = [ Joke(i) for i in np.arange(0,90)]
-    G = assign_groups(items)
-    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-
-    #NDCG plot with Naive, IPS, Pers, Skyline
-
-    ndcg = [  np.mean(exposure_data[0]["NDCG"],axis=0), np.mean(exposure_data[1]["NDCG"],axis=0), np.mean(exposure_pers_data[1]["NDCG"],axis=0),  np.mean(skyline_data[0]["NDCG"],axis=0)]
-    ndcg_std = [exposure_data[0]["NDCG"], exposure_data[1]["NDCG"], exposure_pers_data[1]["NDCG"], skyline_data[0]["NDCG"]]
-    labels = ["Naive","IPS","Pers","Skyline-Pers"]
-    #plt.figure("NDCG", figsize=(15,5))
-    for i in range(4):
-        plot_ndcg(ndcg[i],labels[i],plot=False,window_size=1,std=ndcg_std[i])
-    plt.legend(ncol=2)
-    plt.savefig("plots/Paper_Plots/SkylineNDCG.pdf", bbox_inches="tight", dpi=800)
-    plt.show()
-    plt.close("all")
-
-    #Disparity in Exposure 1. Naive, IPS, Fair-E-IPS, 2. IPS, Pers, Fair-E-Pers
-
-    run_data = [exposure_data[0], exposure_data[1], exposure_data[2], exposure_pers_data[1], exposure_pers_data[2]]
-    ndcg_full = [x["NDCG"][:,:7000] for x in run_data]
-
-    labels=["Naive","IPS","Fair-E-IPS","Pers","Fair-E-Pers"]
-
-    overall_fairness = get_unfairness_from_rundata(run_data,pair_group_combinations,10,7000)
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1,3, 2,4],
-                                     "plots/Paper_Plots/NDCG_UnfairExposure.pdf", 0)
-
-
-    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],"plots/Paper_Plots/NDCG_UnfairExposurePop.pdf", 0)
-    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [1,3,4],
-    #                                 "plots/Paper_Plots/NDCG_UnfairExposurePers.pdf", 0)
-
-
-
-    # Disparity in Impact 1. Naive, IPS, Fair-I-IPS, 2. IPS, Pers, Fair-I-Pers
-
-
-    run_data = [exposure_data[0], exposure_data[1], impact_data[0], exposure_pers_data[1], impact_data[1]]
-    ndcg_full = [x["NDCG"][:,:7000] for x in run_data]
-    labels = ["Naive", "IPS", "Fair-I-IPS", "Pers", "Fair-I-Pers"]
-    overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 10, 7000)
-
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1, 3, 2, 4],"plots/Paper_Plots/NDCG_UnfairImpact.pdf", 1)
-
-    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0,1,2],"plots/Paper_Plots/NDCG_UnfairImpactPop.pdf", 1)
-    #combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [1,3,4],
-    #                                 "plots/Paper_Plots/NDCG_UnfairImpactPers.pdf", 1)
-
-
-    #Unfairness In Impact & Exposure for IPS, Fair-E-Pers, Fair-I-Pers
-    run_data = [exposure_data[1],  exposure_pers_data[2], impact_data[1]]
-    labels = ["IPS", "Fair-E-Pers", "Fair-I-Pers"]
-    overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 10, 7000)
-    plot_Exposure_and_Impact_Unfairness(overall_fairness,labels, "plots/Paper_Plots/ImpactVSExposure.pdf")
-
-
-    #Syntethic Data
-
-    DATA_SET = False
-    items = [Item(i) for i in np.linspace(-1, 1, 20)] + [Item(i) for i in np.linspace(-1, 0.01, 10)]
-    G = assign_groups(items)
-    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-    run_data = synthetic_data
-    ndcg_full = [x["NDCG"][:, :5000] for x in run_data]
-    labels = ["Naive", "IPS",  "Fair-I-IPS", "Fair-E-IPS"]
-    overall_fairness = get_unfairness_from_rundata(run_data, pair_group_combinations, 100, 5000)
-
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2],
-                                     "plots/Paper_Plots/NDCG_UnfairImpactSynthetic.pdf", 1, synthetic=True)
-    combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, [0, 1, 2],
-                                     "plots/Paper_Plots/NDCG_UnfairExposureSynthetic.pdf", 0, synthetic=True)
 
 
 def plot_Exposure_and_Impact_Unfairness(overall_fairness, labels, filename):
@@ -689,10 +441,12 @@ def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, select
     ax2 = plt.subplot(122)
     unfairness_label = "Impact Unfairness" if type == 1 else "Exposure Unfairness"
     for i in selection:
-        #ax2 = plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
-        plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
-                                   unfairness_label=unfairness_label,synthetic=synthetic)
-
+        if np.ndim(overall_fairness)==4:
+            plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
+                                       unfairness_label=unfairness_label,synthetic=synthetic)
+        else:
+            plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :], ax=ax, ax2=ax2, label=labels[i],
+                                 unfairness_label=unfairness_label, synthetic=synthetic)
     ax.legend(ncol=2)#title="NDCG",loc="upper left")
     ax2.legend(ncol=2)#title="Unfairness", loc ="upper right")
     #ax.legend(title="NDCG", loc="center left")

@@ -96,7 +96,7 @@ def get_ndcg_score(ranking, true_relevances, click_model = "PBM_log"):
 @ex.capture
 def get_numerical_relevances(items, DATA_SET, MOVIE_RATING_FILE):
     if DATA_SET == 0:
-        users = [sample_user() for i in range(50000)]
+        users = [data_utils.sample_user_base(distribution="bimodal") for i in range(50000)]
         aff = [affinity_score(u, items) for u in users]
         return np.mean(np.asarray(aff), axis=0)
     elif DATA_SET == 1:
@@ -104,7 +104,22 @@ def get_numerical_relevances(items, DATA_SET, MOVIE_RATING_FILE):
         return np.mean(ranking, axis=0)  # Mean over all users
 
 #Function to obtain a new users, Depending on the Dataset
-sample_user = data_utils.get_user_generator()
+
+class Usersampler:
+    @ex.capture
+    def __init__(self, DATA_SET, BI_LEFT, MOVIE_RATING_FILE):
+        self.data_set = DATA_SET
+        if DATA_SET == 1:
+            self.sample_user_generator = data_utils.sample_user_movie(MOVIE_RATING_FILE)
+        if DATA_SET == 0:
+            self.BI_LEFT = BI_LEFT
+
+    def get_user(self):
+        if self.data_set == 0:
+            return data_utils.sample_user_base(distribution="bimodal", BI_LEFT=self.BI_LEFT)
+        elif self.data_set == 1:
+            return next(self.sample_user_generator)
+
 
 def get_ranking(user, popularity, items, weighted_popularity=None, G=None, ranking_method="Naive", click_model="PBM_log",
                 cum_exposure=None, decomp=None, new_fair_rank=False, nn=None, integral_fairness=None):
@@ -199,8 +214,8 @@ def get_unfairness(clicks, rel, G, error=False):
 # simulation function returns number of iterations until convergence
 @ex.capture
 def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", iterations=2000,
-             numerical_relevance=None, head_start=-1, DATA_SET=0, HIDDEN_UNITS=64, PLOT_PREFIX=""):
-    global sample_user
+             numerical_relevance=None, head_start=-1, DATA_SET=0, HIDDEN_UNITS=64, PLOT_PREFIX="", user_generator=None):
+    #global sample_user
     """
     :param popularity: Initial Popularity
     :param items:  Items/Documents
@@ -251,20 +266,21 @@ def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", i
     count = 0
     nn_errors = np.zeros(iterations)
     nn = None
-
+    if user_generator is None:
+        user_generator = Usersampler()
     for i in range(iterations):
         count += 1
         #For the Headstart Experiment, we first choose Right then Left Leaning Users
         if (i <= head_start * 2):
             if i == head_start * 2:
-                sample_user = lambda: data_utils.sample_user_base(BI_LEFT=0.5)
+                user_generator = Usersampler(BI_LEFT=0.5)
             elif i < head_start:
-                sample_user = lambda: data_utils.sample_user_base(BI_LEFT=0)
+                user_generator = Usersampler(BI_LEFT=0)
             else:
-                sample_user = lambda: data_utils.sample_user_base(BI_LEFT=1)
+                user_generator = Usersampler(BI_LEFT=1)
 
         # choose user
-        user = sample_user()
+        user = user_generator.get_user()
         users.append(user)
         aff_probs = affinity_score(user, items)
         relevances += aff_probs
@@ -552,9 +568,6 @@ def ideal_rank(users, item_affs):
     aff_prob = np.zeros(len(item_affs))
     for user in users:
         aff_prob += affinity_score(user, item_affs)
-        #aff_prob += scipy.stats.norm.pdf(item_affs, user,0.3)
-        #aff_prob /= np.max(aff_prob)
-        #aff_prob = np.around(aff_prob, 3)
 
     return aff_prob, (np.argsort(aff_prob)[::-1])
 
@@ -566,9 +579,9 @@ def ideal_rank(users, item_affs):
 @ex.capture
 def collect_relevance_convergence(items, start_popularity, trials=10, methods=["Naive", "IPS"],
                                   click_models=["PBM_log"], iterations=2000, plot_individual_fairness=True,
-                                  multiple_items=None, PLOT_PREFIX=""):
+                                  multiple_items=None, PLOT_PREFIX="", MOVIE_RATING_FILE=""):
 
-    global sample_user, get_numerical_relevances
+    global get_numerical_relevances
 
     rel_diff = []
     if multiple_items is None:
@@ -586,14 +599,16 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
     frac_c = [[] for i in range(len(G))]
     nn_errors = []
     method_dict = {"Naive": "Naive", "IPS": r'$\hat{R}^{IPS}(d)$', "Pers": "D-ULTR", "Skyline-Pers": "Skyline",
-                   "Fair-I-IPS": "FairCo(Imp)"}
+                   "Fair-I-IPS": "FairCo(Imp)", "Fair-E-IPS": "FairCo(Exp)", "Fair-I-Pers": "FairCo(Imp)", "Fair-E-Pers": "FairCo(Exp)"}
+    user_generator = None
     for click_model in click_models:
 
-        # TODO very Hacky
-        if "lambda" in click_model:
+        if "lambda" in click_model: #For vcomparing different Lambdas,
             lam = float(click_model.replace("lambda", ""))
-            KP = lam
-            W_FAIR = lam
+            ex.add_config({
+                'KP': lam,
+                'W_FAIR': lam
+            })
             click_model = "PBM_log"
         for method in methods:
             start_time = time.time()
@@ -608,8 +623,9 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
                     if multiple_items == -1:  # Load a new bernully relevance table
                         MOVIE_RATING_FILE = MOVIE_RATING_FILE.replace("trial{}.npy".format(i-1),"trial{}.npy".format(i))
                         #MOVIE_RATING_FILE = "data/movie_data_binary_latent_5Comp_trial{}.npy".format(i)
-                        sample_user = lambda: next(data_utils.sample_user_movie(MOVIE_RATING_FILE))
-                        get_numerical_relevances = lambda x: get_numerical_relevances(x,MOVIE_RATING_FILE=MOVIE_RATING_FILE)
+                        user_generator = Usersampler(MOVIE_RATING_FILE=MOVIE_RATING_FILE)
+                        ranking, _, _ = data_utils.load_movie_data_saved(MOVIE_RATING_FILE)
+                        get_numerical_relevances = lambda x: np.mean(ranking, axis=0)
 
                     else:
                         items = multiple_items[i]
@@ -617,7 +633,7 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
                 popularity = np.copy(start_popularity)
                 # Run Simulation
                 iterations, ranking_hist, popularity_hist, final_ranking, users, ideal, mean_relevances, w_pophist, errors, mean_exposure, fairness_hist, p_pophist = \
-                    simulate(popularity, items, ranking_method=method, click_model=click_model, iterations=iterations)
+                    simulate(popularity, items, ranking_method=method, click_model=click_model, iterations=iterations, user_generator=user_generator)
                 ranking_hist = ranking_hist.astype(int)
                 if "Pers" in method:
                     nn_error_trial.append(errors)
@@ -751,20 +767,9 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
     overall_fairness /= len(pair_group_combinations)
     plot_unfairness_over_time(overall_fairness, click_models, methods, True)
 
-    fig, ax = plt.subplots()
-    ax2 = None
-    for i, data in enumerate(run_data):
-        ax2 = plot_NDCG_Unfairness(data["NDCG"], overall_fairness[i, :, :, 1], ax=ax, ax2=ax2, label=labels[i],
-                                   unfairness_label="Exposure Unfairness")
-    ax.legend()
-    plt.savefig(PLOT_PREFIX + "NDCG_UnfairExposure.pdf", bbox_inches="tight", dpi=800)
-    plt.close("all")
-
-    fig, ax = plt.subplots()
-    ax2 = None
-    for i, data in enumerate(run_data):
-        ax2 = plot_NDCG_Unfairness(data["NDCG"], overall_fairness[i, :, :, 3], ax=ax, ax2=ax2, label=labels[i],
-                                   unfairness_label="Impact Unfairness")
-    ax.legend()
-    plt.savefig(PLOT_PREFIX + "NDCG_UnfairImpact.pdf", bbox_inches="tight", dpi=800)
-    plt.close("all")
+    ndcg_full = []
+    for data in run_data:
+        ndcg_full.append(data["NDCG"])
+    plt.close('all')
+    combine_and_plot_ndcg_unfairness(ndcg_full,overall_fairness[:, :, :, 1],labels= labels, selection=np.arange(len(run_data)), name=PLOT_PREFIX + "NDCG_UnfairExposure.pdf",type = 0 )
+    combine_and_plot_ndcg_unfairness(ndcg_full,overall_fairness[:, :, :, 3],labels= labels, selection=np.arange(len(run_data)), name=PLOT_PREFIX + "NDCG_UnfairImpact.pdf",type = 1 )
