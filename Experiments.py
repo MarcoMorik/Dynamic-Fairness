@@ -251,12 +251,13 @@ def compare_controller_LP(PLOT_PREFIX, trials = 20, iterations = 3000):
     items = multiple_items[0]
     popularity = np.ones(len(items))
     G = assign_groups(items)
-    click_models = ["lambda0","lambda0.0001", "lambda0.001", "lambda0.01","lambda0.1","lambda1", "lambda10","lambda100"]#,"lambda1000"]
+    click_models = ["lambda0","lambda0.0001", "lambda0.001", "lambda0.01","lambda0.1","lambda1", "lambda10","lambda100"]
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=click_models,
                                   methods=["Fair-I-IPS-LP", "Fair-I-IPS"], iterations=iterations,
                                   plot_individual_fairness=False, multiple_items=multiple_items)
+    load_and_plot_lambda_comparison(PLOT_PREFIX, trials)
 
 
 def news_experiment():

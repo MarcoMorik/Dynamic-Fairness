@@ -65,7 +65,7 @@ def __main__(EXPERIMENT, MOVIE_RATING_FILE, PLOT_PREFIX, trials, iterations):
                          MOVIE_RATING_FILE,
                          trials=10, iterations=6000, binary_rel=True)
     elif EXPERIMENT == 10:
-        data_utils.load_movie_data(movie_ranking_sample_file=MOVIE_RATING_FILE.replace("trial0.npy", ""))
+        data_utils.load_movie_data(movie_ranking_sample_file=MOVIE_RATING_FILE.replace("trial0.npy", "trial"))
         movie_experiment(PLOT_PREFIX,
                          ["Pers", "Fair-I-IPS",  "Fair-E-IPS"],
                          MOVIE_RATING_FILE,

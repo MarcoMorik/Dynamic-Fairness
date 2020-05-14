@@ -404,7 +404,7 @@ def plot_Exposure_and_Impact_Unfairness(overall_fairness, labels, filename):
         plt.fill_between(np.arange(n), overall_fairness[i, :, 0] - fairness_std[i, :, 0],
                          overall_fairness[i, :, 0] + fairness_std[i, :, 0], alpha=0.4, color=color)
         ax = plt.gca()
-        ax.set_ylim(0, 0.2)
+        ax.set_ylim(0, 0.4)
         ax.set_xlim(0, n)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
@@ -419,7 +419,7 @@ def plot_Exposure_and_Impact_Unfairness(overall_fairness, labels, filename):
         plt.fill_between(np.arange(n), overall_fairness[i, :, 1] - fairness_std[i, :, 1],
                          overall_fairness[i, :, 1] + fairness_std[i, :, 1], alpha=0.4, color=color)
         ax = plt.gca()
-        ax.set_ylim(0, 0.2)
+        ax.set_ylim(0, 0.4)
         ax.set_xlim(0, n)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
@@ -509,54 +509,19 @@ def plot_with_errorbar(x, all_stats, methods, filename, x_label, log_x = False, 
     plt.close("all")
 
 
-def load_and_plot_lambda_comparison():
+def load_and_plot_lambda_comparison(data_path, trials):
 
     items = [Item(i) for i in np.linspace(-1, 1, 20)] +[Item(i) for i in np.linspace(-1, 0.01, 10)]
     G = assign_groups(items)
     pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-
-    trials, iterations = 10, 2000
     methods = ["Fair-I-IPS-LP", "Fair-I-IPS"]
-    n = len(methods)
-    data = np.load("plots/LambdaTest/Fairness_Data.npy") # Fair-I-IPS-LP [0,2,4,6,8]  Fair-I-IPS [1,3,5,7,9] lambda 0.0001, 0.001, 0.01, 0.1, 10
-    data100 = np.load("plots/LambdaTest/Fairness_Data100.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS [1]   lambda 100
-    data1 = np.load("plots/LambdaTest/Fairness_Data1.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS [1]   lambda 1
-    data1000 = np.load("plots/LambdaTest/Fairness_Data1000.npy")  # Fair-I-IPS-LP [0]  Fair-I-IPS [1]   lambda 1000, 10000
-    """
-    #TODO import IPS as baseline?
-    data = np.concatenate((data, data1, data100, data1000))
-    x = [0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000,10000 ] # , 1
-    data[[8,9,10,11]] = data[[10,11,8,9]]
-    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdacomparison")
+    data = np.load(data_path + "Fairness_Data.npy")
+
+    x = [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100]
+    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, data_path + "lambdaAllComparisons")
 
 
-    data = np.load("plots/LambdaTest/Fairness_DataExposure.npy")
-    items = [Item(i) for i in np.linspace(-1, 1, 10)] +[Item(i) for i in np.linspace(-1, -0.01, 5)]
-    G = assign_groups(items, False)
-    pair_group_combinations = [(a, b) for a in range(len(G)) for b in range(a + 1, len(G))]
-    x = [0.1, 1, 10, 100, 1000]
-    methods = ["Fair-E-IPS-LP", "Fair-E-IPS"]
-    trials, iterations = 5, 2000
-    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaExposurecomparison")
-
-
-    data = np.load("plots/LambdaTest/Fairness_DataExposureNoCompensate.npy")
-    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaExposureNoCompensate")
-
-    data = np.load("plots/LambdaTest/Fairness_DataAllComparisons.npy")
-
-    methods = ["Fair-I-IPS-LP", "Fair-I-IPS"]
-    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaImpactAllComparisonsOld")
-    """
-
-    data = np.load("plots/LambdaTest/Fairness_Data_Final.npy")
-
-    trials, iterations = 10, 2000
-    x = [0, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000]
-    plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, "lambdaImpactAllComparisons_final")
-
-
-def plot_lambda_comparison(x,data, methods, trials, pair_group_combinations,name ):
+def plot_lambda_comparison(x, data, methods, trials, pair_group_combinations, name):
 
     n = len(methods)
     all_stats = np.zeros((len(data) // 2, len(methods), trials, 3))
@@ -570,11 +535,10 @@ def plot_lambda_comparison(x,data, methods, trials, pair_group_combinations,name
             all_stats[j // n, j % n, :, 2] += np.abs(data[j]["clicks"][:, -1, a] / data[j]["true_rel"][:, -1, a] -
                                                      data[j]["clicks"][:, -1, b] / data[j]["true_rel"][:, -1, b])
     all_stats[:, :, :, 1:] /= len(pair_group_combinations)
-    print("allstats shape", np.shape(all_stats))
-    plot_with_errorbar(x, all_stats, methods, "plots/Paper_Plots/"+ name+ ".pdf",
+    #print("allstats shape", np.shape(all_stats))
+    plot_with_errorbar(x, all_stats, methods, name+ "Impact.pdf",
                        r'$\lambda $', log_x=True)
-    plot_with_errorbar(x, all_stats, methods,
-                       "plots/Paper_Plots/" + name+ "Exposure.pdf",
+    plot_with_errorbar(x, all_stats, methods, name+ "Exposure.pdf",
                        r'$\lambda $', log_x=True, impact=False)
 
 

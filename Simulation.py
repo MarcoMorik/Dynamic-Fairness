@@ -4,7 +4,6 @@ from scipy.stats import truncnorm
 import scipy.integrate
 import scipy.stats
 import random
-#from sinkhorn_knopp import sinkhorn_knopp as skp
 import pandas as pd
 import time
 import warnings; warnings.simplefilter('ignore') ##Ignores Warnings for nicer Plots. Disable for Debugging
@@ -13,7 +12,7 @@ import os
 import birkhoff
 import relevance_network
 from itertools import permutations
-import  matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from plotting import *
 
@@ -599,7 +598,8 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
     frac_c = [[] for i in range(len(G))]
     nn_errors = []
     method_dict = {"Naive": "Naive", "IPS": r'$\hat{R}^{IPS}(d)$', "Pers": "D-ULTR", "Skyline-Pers": "Skyline",
-                   "Fair-I-IPS": "FairCo(Imp)", "Fair-E-IPS": "FairCo(Exp)", "Fair-I-Pers": "FairCo(Imp)", "Fair-E-Pers": "FairCo(Exp)"}
+                   "Fair-I-IPS": "FairCo(Imp)", "Fair-E-IPS": "FairCo(Exp)", "Fair-I-Pers": "FairCo(Imp)",
+                   "Fair-E-Pers": "FairCo(Exp)", "Fair-I-IPS-LP": "LinProg(Imp)", "Fair-E-IPS-LP": "LinProg(Exp)"}
     user_generator = None
     for click_model in click_models:
 
