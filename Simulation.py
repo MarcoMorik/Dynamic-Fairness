@@ -694,9 +694,6 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
                 nn_errors.append(mean_trial_error)
 
             count += 1
-            # Plot the Fairness per Group for a single model
-            if (plot_individual_fairness):
-                plot_fairness_over_time(fairness, G, method)
             # Collect Data for later
             run_data.append(fairness)
 

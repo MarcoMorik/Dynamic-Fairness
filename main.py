@@ -25,8 +25,7 @@ def __main__(EXPERIMENT, MOVIE_RATING_FILE, PLOT_PREFIX, trials, iterations):
         if not os.path.exists(PLOT_PREFIX):
             os.makedirs(PLOT_PREFIX)
         collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                      methods=["Naive", "IPS", "Fair-I-IPS"], iterations=iterations,
-                                      plot_individual_fairness=True, multiple_items=multiple_items)
+                                      methods=["Naive", "IPS", "Fair-I-IPS"], iterations=iterations, multiple_items=multiple_items)
 
     elif EXPERIMENT == 2:
         multiple_items = [load_news_items(n=30, completly_random=True) for i in range(trials)]
@@ -36,8 +35,7 @@ def __main__(EXPERIMENT, MOVIE_RATING_FILE, PLOT_PREFIX, trials, iterations):
         if not os.path.exists(PLOT_PREFIX):
             os.makedirs(PLOT_PREFIX)
         collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                      methods=["Naive", "IPS"], iterations=iterations,
-                                      plot_individual_fairness=True, multiple_items=multiple_items)
+                                      methods=["Naive", "IPS"], iterations=iterations, multiple_items=multiple_items)
     elif EXPERIMENT == 3:
         experiment_different_starts(False, trials, iterations, PLOT_PREFIX)
     elif EXPERIMENT == 4:

@@ -255,8 +255,7 @@ def compare_controller_LP(PLOT_PREFIX, trials = 20, iterations = 3000):
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=click_models,
-                                  methods=["Fair-I-IPS-LP", "Fair-I-IPS"], iterations=iterations,
-                                  plot_individual_fairness=False, multiple_items=multiple_items)
+                                  methods=["Fair-I-IPS-LP", "Fair-I-IPS"], iterations=iterations, multiple_items=multiple_items)
     load_and_plot_lambda_comparison(PLOT_PREFIX, trials)
 
 
@@ -314,8 +313,7 @@ def news_experiment():
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  methods=["Naive", "IPS"], iterations=iterations,
-                                  plot_individual_fairness=True, multiple_items=multiple_items)
+                                  methods=["Naive", "IPS"], iterations=iterations, multiple_items=multiple_items)
     return
 
     PLOT_PREFIX = "News_data/plots/Random_data_final_unconditionalNDCG/"
@@ -327,9 +325,8 @@ def news_experiment():
     if not os.path.exists(PLOT_PREFIX):
         os.makedirs(PLOT_PREFIX)
     collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
-                                  # methods=["Naive", "IPS", "Pers", "Fair-I-IPS", "Fair-I-Pers", "Fair-E-IPS", "Fair-E-Pers"], iterations=iterations,
                                   methods=["Naive", "IPS", "Fair-I-IPS", "Fair-E-IPS"], iterations=iterations,
-                                  plot_individual_fairness=True, multiple_items=multiple_items)
+                                  multiple_items=multiple_items)
 
 
 @ex.capture
@@ -350,6 +347,5 @@ def movie_experiment(PLOT_PREFIX, methods, MOVIE_RATING_FILE, trials=4, iteratio
         multi = -1
     else:
         multi = None
-    collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],  # ["PBM_log"],
-                                  methods=methods, iterations=iterations,
-                                  plot_individual_fairness=True, multiple_items=multi)
+    collect_relevance_convergence(items, popularity, trials, click_models=["PBM_log"],
+                                  methods=methods, iterations=iterations, multiple_items=multi)

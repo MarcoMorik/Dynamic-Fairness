@@ -89,7 +89,7 @@ def plot_click_bar_plot(frac_c,labels, save=False, PLOT_PREFIX=""):
     plt.ylabel("Average number of clicks")
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     if(save):
-        plt.savefig(PLOT_PREFIX + "Barplot.pdf", bbox_inches="tight")
+        plt.savefig(PLOT_PREFIX + "AverageClicksPerModel.pdf", bbox_inches="tight")
     else:
         plt.show()
 
@@ -244,43 +244,6 @@ def plot_unfairness_over_time(overall_fairness, click_models, methods, only_two 
     #files.download("Unfairness.pdf")
 
     plt.show("Unfairness")
-
-@ex.capture
-def plot_fairness_over_time(fairness, G, model, PLOT_PREFIX, DATA_SET):
-    n = np.shape(fairness["rel"])[0]
-    if DATA_SET == 0:
-        group_dict = {0: "Negative", 1: "Positive", 2: "Neutral"}
-        color_dict = {0: "blue", 1: "red", 2: "black"}
-    else:
-        group_dict = {0: "C0", 1: "C1", 2: "C2", 3: "C3", 4: "C4"}
-        color_dict = {0: "blue", 1: "red", 2: "black", 3: "green", 4: "yellow"}
-    normalize_iter = np.arange(n)
-    normalize_iter[0] = 1#Zerost iteration should be divided by 1
-
-    plt.figure("Fairness",figsize=(17,4))
-    for g in range(len(G)):
-        plt.subplot(141)
-        #plt.axis([0,n,0,3])
-        plt.title("Model "+ model + "\n Exposure per est. Relevance")
-        plt.plot(np.arange(n), fairness["prop"][:,g] / fairness["rel"][:,g], label="Group " + group_dict[g], color=color_dict[g])
-        plt.subplot(142)
-        #plt.axis([0,n,0,1])
-        plt.title("Model "+ model + "\n Exposure per True Relevance")
-        plt.plot(np.arange(n), fairness["prop"][:,g] / fairness["true_rel"][:,g], label="Group " + group_dict[g], color=color_dict[g])
-        plt.subplot(143)
-        #plt.axis([0,n,0,1])
-        plt.title("Model "+ model + "\n Clicks per est. Relevance")
-        plt.plot(np.arange(n), fairness["clicks"][:,g] / fairness["rel"][:,g], label="Group " + group_dict[g], color=color_dict[g] )
-        plt.subplot(144)
-        plt.title("Model "+ model + "\n Clicks per True Relevance")
-        plt.plot(np.arange(n), fairness["clicks"][:,g] / fairness["true_rel"][:,g], label="Group " + group_dict[g], color=color_dict[g])
-        plt.axis([0,n,0,1])
-
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-
-    plt.savefig(PLOT_PREFIX + "Fairness"+ model+ ".pdf", bbox_inches="tight")
-    plt.show()
-    #files.download("Fairness"+ model+ ".pdf")
 
 
 def plot_ndcg(ndcg, label="", plot=True, figure_name="NDCG", window_size=0, std = None):
