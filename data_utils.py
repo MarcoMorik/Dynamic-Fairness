@@ -290,7 +290,7 @@ def find_biclique(ratings, sol = [], depth = 0, M = 10, N = 500):
 
 
 @ex.capture
-def sample_user_base(distribution, alpha, beta, u_std, BI_LEFT = 0.5):
+def sample_user_base(distribution, alpha =0.5, beta = 0.5, u_std=0.3, BI_LEFT = 0.5):
     """
     Returns a User of the News Platform
     A user cosists of is Polarity and his Openness

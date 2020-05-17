@@ -282,23 +282,6 @@ def plot_ndcg(ndcg, label="", plot=True, figure_name="NDCG", window_size=0, std 
     if(plot):
         plt.title("Average NDCG in model " + label)
         plt.show()
-def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection, name, type=0, synthetic=False, colors=None):
-    # fig, ax = plt.subplots()
-    # ax2 = None
-    ax = plt.subplot(121)
-    ax2 = plt.subplot(122)
-    unfairness_label = "Impact Unfairness" if type == 1 else "Exposure Unfairness"
-    for i in selection:
-        # ax2 = plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
-        plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :, type], ax=ax, ax2=ax2, label=labels[i],
-                             unfairness_label=unfairness_label, synthetic=synthetic, color=colors[i])
-
-    handles, labels = ax.get_legend_handles_labels()
-    handles2, labels2 = ax2.get_legend_handles_labels()
-    order = [0,2,1,3]
-    ax2.legend()
-    plt.savefig(name, bbox_inches="tight", dpi=800)
-    plt.close("all")
 
 
 
@@ -311,7 +294,7 @@ def plot_NDCG_Unfairness(ndcg,unfairness,ax, ax2=None, label="", unfairness_labe
     std_ndcg = np.std(cum_ndcg, axis=0)
     cum_ndcg = np.mean(cum_ndcg, axis=0)
 
-    unfairness_std = np.std(unfairness,axis=0)
+    unfairness_std = np.std(unfairness, axis=0)
     unfairness = np.mean(unfairness, axis=0)
     p = ax.plot(np.arange(n), cum_ndcg, label=label, linestyle='-')
 
@@ -398,7 +381,7 @@ def plot_Exposure_and_Impact_Unfairness(overall_fairness, labels, filename):
 
 def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, selection, name,  type=0 ,synthetic=False):
 
-    #fig, ax = plt.subplots()
+    fig, ax = plt.subplots(1,2,figsize=(16, 8))
     #ax2 = None
     ax = plt.subplot(121)
     ax2 = plt.subplot(122)
@@ -410,16 +393,13 @@ def combine_and_plot_ndcg_unfairness(ndcg_full, overall_fairness, labels, select
         else:
             plot_NDCG_Unfairness(ndcg_full[i], overall_fairness[i, :, :], ax=ax, ax2=ax2, label=labels[i],
                                  unfairness_label=unfairness_label, synthetic=synthetic)
-    ax.legend(ncol=2)#title="NDCG",loc="upper left")
+    #ax.legend(ncol=2)#title="NDCG",loc="upper left")
     ax2.legend(ncol=2)#title="Unfairness", loc ="upper right")
     #ax.legend(title="NDCG", loc="center left")
     #ax2.legend(title="Unfairness", loc="center right")
-
-    #plt.legend(ax.lines + ax2.lines, ncol=2)
-    #ax.legend(ncol=2)
-    #squarify(fig)
-    plt.savefig(name, bbox_inches="tight", dpi=800)
-    plt.close("all")
+    if "Jupyter" not in name:
+        plt.savefig(name, bbox_inches="tight", dpi=800)
+        plt.close("all")
 
 
 def plot_with_errorbar(x, all_stats, methods, filename, x_label, log_x = False, impact=True):

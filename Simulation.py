@@ -30,7 +30,7 @@ def assign_groups(items):
 
 #Funktions for User score, position score, assigning groups and  User distributions
 @ex.capture
-def affinity_score(user, items, bernulli = True, DATA_SET=1):
+def affinity_score(user, items, bernulli=True, DATA_SET=0):
     if DATA_SET == 1:
         if (type(items) == list):
             return np.asarray([user[0][x.id] for x in items])
@@ -93,10 +93,10 @@ def get_ndcg_score(ranking, true_relevances, click_model = "PBM_log"):
     return dcg / idcg
 
 @ex.capture
-def get_numerical_relevances(items, DATA_SET, MOVIE_RATING_FILE):
+def get_numerical_relevances(items, DATA_SET, MOVIE_RATING_FILE=""):
     if DATA_SET == 0:
         users = [data_utils.sample_user_base(distribution="bimodal") for i in range(50000)]
-        aff = [affinity_score(u, items) for u in users]
+        aff = [affinity_score(u, items, DATA_SET=DATA_SET) for u in users]
         return np.mean(np.asarray(aff), axis=0)
     elif DATA_SET == 1:
         ranking, _, _ = data_utils.load_movie_data_saved(MOVIE_RATING_FILE)
