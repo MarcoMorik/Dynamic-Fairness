@@ -6,7 +6,7 @@ import scipy.stats
 import random
 import pandas as pd
 import time
-import warnings; warnings.simplefilter('ignore') ##Ignores Warnings for nicer Plots. Disable for Debugging
+import warnings; warnings.simplefilter('ignore') #Ignores Warnings for nicer Plots. Disable for Debugging
 import data_utils
 import os
 import birkhoff
@@ -25,8 +25,6 @@ def assign_groups(items):
     for i, item in enumerate(items):
         G[item.g].append(i)
     return G
-
-#################### Calculate Score between Items and Use #################
 
 #Funktions for User score, position score, assigning groups and  User distributions
 @ex.capture
@@ -53,7 +51,7 @@ def affinity_score(user, items, bernulli=True, DATA_SET=0):
         return aff_prob
     
     
-####### Calculate The position Bias for each of the N Positions #########
+#    Calculate The position Bias for each of the N Positions #
 def position_bias(n, model="PBM_log", ranked_relevances = None):
     if(model=="PBM_log"):#Position Based Model with inverse log(rank)
         pos = 1/(np.log2(2+np.arange(n)))
@@ -281,7 +279,7 @@ def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", i
         # choose user
         user = user_generator.get_user()
         users.append(user)
-        aff_probs = affinity_score(user, items)
+        aff_probs = affinity_score(user, items, DATA_SET=DATA_SET)
         relevances += aff_probs
 
         # clicking probabilities
@@ -327,7 +325,6 @@ def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", i
                     train_y = aff_scores[:i + 1]
                 else:
                     train_y = np.concatenate((train_y, w_pophist[i - 9:i + 1] - w_pophist[i - 10:i]))
-                    # assert(np.array_equal(train_y,w_pophist[:i + 1] - np.concatenate((np.zeros((1, len(items))), w_pophist[:i]))))
                 if DATA_SET == 1:
                     train_x = np.concatenate((train_x, np.asarray([u[1] for u in users[-10:]])))
                 else:
@@ -353,7 +350,7 @@ def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", i
         if DATA_SET:
             NDCG[i] = get_ndcg_score(ranking, user[0])
         else:
-            NDCG[i] = get_ndcg_score(ranking, aff_probs)  # numerical_relevance)
+            NDCG[i] = get_ndcg_score(ranking, aff_probs)
 
         group_prop[i, :] = [np.sum(cum_exposure[G[i]]) for i in range(len(G))]
         group_clicks[i, :] = [np.sum(popularity[G[i]]) for i in range(len(G))]
@@ -367,7 +364,7 @@ def simulate(popularity, items, ranking_method="Naive", click_model="PBM_log", i
         true_group_rel[i, :] = [np.sum(numerical_relevance[G[g]]) * count for g in range(len(G))]
 
 
-    ideal_vals, ideal_ranking = ideal_rank(users, items)
+    ideal_vals, ideal_ranking = ideal_rank(users, items, DATA_SET = DATA_SET)
 
     mean_relevances = relevances / count
     mean_exposure = cum_exposure / count
@@ -438,8 +435,6 @@ def neural_rank(nn, items, user, DATA_SET = 1, e_p = 0, KP= 0.01 ):
         x_test = np.asarray(user[1])
     elif DATA_SET == 0:
         x_test = np.asarray(user)
-        #x_test = np.asarray(list(map(lambda x: x.get_features(), items)))
-    #print("Input  shape", x_test.shape)
     relevances = nn.predict(x_test)
     return np.argsort(relevances+ KP * e_p)[::-1]
 
@@ -495,17 +490,14 @@ def fair_rank(items, popularity,ind_fair=False, group_fair=True, debug=False, w_
         j = 0
         for a,b in comparisons:
             f = np.zeros(n_c)
-            if len(G[a]) > 0 and len(G[b])>0: # and U[a] >= U[b]: #len(G[a]) * U[a] >= len(G[b]) *U[b]: for comparing mean popularity
+            if len(G[a]) > 0 and len(G[b])>0:
                 for i in range(n):
-                    #tmp1 = 1. / U[a] if i in G[a] else 0
-                    #tmp2 = 1. / U[b] if i in G[b] else 0
                     if impact:
                         tmp1 = popularity[i] / U[a] if i in G[a] else 0
                         tmp2 = popularity[i] / U[b] if i in G[b] else 0
                     else:
                         tmp1 = 1. / U[a] if i in G[a] else 0
                         tmp2 = 1. / U[b] if i in G[b] else 0
-                    #f[i*n:(i+1)*n] *= max(0, sign*(tmp1 - tmp2))
                     f[i*n:(i+1)*n] =  (tmp1 - tmp2) # * popularity[i] for equal impact instead of equal Exposure
                 for i in range(n):
                     f[i:n**2:n] *= pos_bias[i]
@@ -534,7 +526,6 @@ def fair_rank(items, popularity,ind_fair=False, group_fair=True, debug=False, w_
 
     res = scipy.optimize.linprog(c, A_eq=A_eq, b_eq=b_eq, A_ub=A_ub, b_ub=b_ub, bounds=bounds, options=dict(bland =True, tol=1e-12), method = "interior-point")
     probabilistic_ranking = np.reshape(res.x[:n**2],(n,n))
-    #probabilistic_ranking = np.reshape(res.x[:n**2],(n,n))
 
 
     if(debug):
@@ -563,10 +554,10 @@ def fair_rank(items, popularity,ind_fair=False, group_fair=True, debug=False, w_
     return decomp
 
 
-def ideal_rank(users, item_affs):
+def ideal_rank(users, item_affs, DATA_SET = 0):
     aff_prob = np.zeros(len(item_affs))
     for user in users:
-        aff_prob += affinity_score(user, item_affs)
+        aff_prob += affinity_score(user, item_affs, DATA_SET=DATA_SET)
 
     return aff_prob, (np.argsort(aff_prob)[::-1])
 
@@ -613,7 +604,6 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
         for method in methods:
             start_time = time.time()
             rel_diff_trial = []
-            # rel_diff_top20 = []
             fairness = {"prop": np.zeros((trials, iterations, len(G))),
                         "clicks": np.zeros((trials, iterations, len(G))), "rel": np.zeros((trials, iterations, len(G))),
                         "true_rel": np.zeros((trials, iterations, len(G))), "NDCG": np.zeros((trials, iterations))}
@@ -650,9 +640,6 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
                     rel_estimate = w_pophist / np.arange(1, iterations + 1)[:, np.newaxis]
 
                 rel_diff_trial.append(np.mean(np.abs(rel_estimate - (mean_relevances)[np.newaxis, :]), axis=1))
-                # if len(items) > 20 and False:
-                #        rel_top20 = np.mean(np.abs(rel_estimate[:,ranking_hist[:,:20]] - mean_relevances[np.newaxis,ranking_hist[:,:20]]),axis = 1)
-                #        rel_diff_top20.append(rel_top20)
 
                 # Cummulative Fairness per Iteration summed over trials
                 for key, value in fairness_hist.items():
@@ -682,7 +669,6 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
                                     Line2D([0], [0], color="red", lw=4)]
 
                     plt.legend(custom_lines, ['Negative', 'Positive'])
-                    # plt.show()
                     plt.legend()
                     plt.savefig(PLOT_PREFIX + "Rankinghistory_" + click_model + "_" + method + ".pdf",
                                 bbox_inches="tight")
@@ -707,8 +693,6 @@ def collect_relevance_convergence(items, start_popularity, trials=10, methods=["
                 rel_tmp = np.mean(np.asarray(rel_diff_trial), axis=0)
                 rel_std = np.std(np.asarray(rel_diff_trial), axis=0)
             rel_diff.append([rel_tmp, method_dict[method], rel_std])
-            # if(len(items)>20 and False):
-            #    rel_diff.append((np.mean(np.asarray(rel_diff_top20),axis=0),click_model.replace("_log","") + " "+ method + "top 20"))
 
     np.save(PLOT_PREFIX + "Fairness_Data.npy", run_data)
     # Plot NDCG

@@ -4,32 +4,10 @@ import numpy as np
 
 import os
 from config import ex
-#from scipy.sparse.linalg import svd
 
 import surprise
 sigmoid = lambda x: 1. / (1. + np.exp(-(x - 3) / 0.1))
 from Documents import Item
-
-def load_data():
-    df = pd.read_excel("data/jester-data-1.xls",header=None)
-    df2 = pd.read_excel("data/jester-data-2.xls",header=None)
-
-    df = df.append(df2, ignore_index = True)
-
-    complete = df[0] == 100
-
-    df = df[complete].sample(frac=1)
-    df = df.iloc[:, 1:]
-
-    df = df.where(df > JOKE_THRESHHOLD, 0)
-    df = df.where(df < JOKE_THRESHHOLD, 1)
-    #df = df/10.
-    feature_jokes = [5,7,8,13,15,16,17,18,19,20]
-    no_features = [i for i in range(df.shape[1]) if i + 1 not in feature_jokes]
-    joke = df.iloc[:, no_features]
-    feature = df.iloc[:, feature_jokes]
-
-    return joke, feature
 
 def load_news_data(seed=18):
     #MEDIA_SOURCES = ["ABC","AP", "BBC", "Bloomberg", "Breitbart","Buzzfeed","CBS","CNN","Conservative Tribune", "Daily Mail", "Democrazy Now", "Fox News", "Huffington Post", "Intercept", "Life News", "MSNBC", "National Review", "New York Times", "The American Conservative", "The Federalist", "The Guardian", "Washington Post", "WorldNetDaily"]
@@ -310,16 +288,14 @@ def sample_user_base(distribution, alpha =0.5, beta = 0.5, u_std=0.3, BI_LEFT = 
             openness = 0.1
     elif(distribution == "bimodal"):
         if np.random.rand() < BI_LEFT:
-            #user = truncnorm.rvs(-1,1,0.5,0.2,1)
             u_polarity = np.clip(np.random.normal(0.5,0.2,1),-1,1)
         else:
-            #user = truncnorm.rvs(-1,1,-0.5,0.2,1)
             u_polarity = np.clip(np.random.normal(-0.5, 0.2, 1), -1, 1)
-        openness = np.random.rand()/2 + 0.05 #Openness uniform Distributed between 0.5 and 0.55
+        openness = np.random.rand()/2 + 0.05 #Openness uniform Distributed between 0.05 and 0.55
     else:
         print("please specify a distribution for the user")
         return (0,1)
-    return np.asarray([u_polarity, openness]) #, user**2, np.sign(user)) #
+    return np.asarray([u_polarity, openness])
 
 @ex.capture
 def sample_user_movie(MOVIE_RATING_FILE):
@@ -332,7 +308,7 @@ def sample_user_movie(MOVIE_RATING_FILE):
         random_order = np.random.permutation(np.shape(ranking)[0])
         for i in random_order:
             yield (ranking[i,:], features[i,:])
-        print("All user preferences already given, restarting with the old user!")
+        #print("All user preferences already given, restarting with the old user!")
 
 
 
