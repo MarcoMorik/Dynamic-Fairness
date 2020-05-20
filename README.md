@@ -13,11 +13,11 @@ Experients 7-10 are based on the [MovieLens 20M Dataset](https://grouplens.org/d
 
 ### File Overview:
 
-data_utils.py: For loading and preprocessing the data
-Experiments.py: Here we define the functions called for different experiments (like different starting users, different user populations, etc.)
-Documents.py: Just the classes for our Items (Movie, News article)
-relevance_network.py: The neural network for the personalized ranking 
-Simulation.py : Here is the simulation happening, incl. Ranking Function, Click_Model, ...
+data_utils.py: For loading and preprocessing the data  
+Experiments.py: Here we define the functions called for different experiments (like different starting users, different user populations, etc.)  
+Documents.py: Just the classes for our Items (Movie, News article)  
+relevance_network.py: The neural network for the personalized ranking  
+Simulation.py : Here is the simulation happening, incl. Ranking Function, Click_Model, ...  
 
 
 ## Jupyter Notebook
