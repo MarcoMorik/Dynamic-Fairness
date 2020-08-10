@@ -53,18 +53,18 @@ def __main__(EXPERIMENT, MOVIE_RATING_FILE, PLOT_PREFIX, trials, iterations):
     elif EXPERIMENT == 8:
         data_utils.load_movie_data(movie_ranking_sample_file=MOVIE_RATING_FILE.replace("trial0.npy", "trial"))
         movie_experiment(PLOT_PREFIX,
-                         ["Naive", "IPS", "Pers", "Fair-E-IPS"],
+                         ["Naive", "IPS", "Pers", "Fair-E-Pers"],
                          MOVIE_RATING_FILE,
                          trials=trials, iterations=iterations, binary_rel=True)
     elif EXPERIMENT == 9:
         data_utils.load_movie_data(movie_ranking_sample_file=MOVIE_RATING_FILE.replace("trial0.npy", "trial"))
         movie_experiment(PLOT_PREFIX,
-                         ["Naive", "IPS", "Pers", "Fair-I-IPS"],
+                         ["Naive", "IPS", "Pers", "Fair-I-Pers"],
                          MOVIE_RATING_FILE,
-                         trials=10, iterations=6000, binary_rel=True)
+                         trials=trials, iterations=iterations, binary_rel=True)
     elif EXPERIMENT == 10:
         data_utils.load_movie_data(movie_ranking_sample_file=MOVIE_RATING_FILE.replace("trial0.npy", "trial"))
         movie_experiment(PLOT_PREFIX,
-                         ["Pers", "Fair-I-IPS",  "Fair-E-IPS"],
+                         ["Pers", "Fair-I-Pers",  "Fair-E-Pers"],
                          MOVIE_RATING_FILE,
                          trials=trials, iterations=iterations, binary_rel=True)
