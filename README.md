@@ -1,5 +1,5 @@
 # Controlling Fairness and Bias in Dynamic Learning-to-Rank
-In this repository, we have uploaded the code corresponding to the SIGIR2020 Paper "Controlling Fairness and Bias in Dynamic Learning-to-Rank". 
+In this repository, we have uploaded the code corresponding to the SIGIR2020 Paper "Controlling Fairness and Bias in Dynamic Learning-to-Rank", which is also on arxiv (https://arxiv.org/abs/2005.14713).
 
 The Paper contains 10 Figures corresponding to 10 different experiments. You can reproduce all of them from the command line. 
 
@@ -22,3 +22,6 @@ Simulation.py : Here is the simulation happening, incl. Ranking Function, Click_
 
 ## Jupyter Notebook
 To get started, take a look at the Jupyter Notebook "Example.ipynb". Here you can run a single trial for all our Ranking-Methods on both the News and the Movie Dataset
+
+
+## 
